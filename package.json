@@ -4,7 +4,7 @@
   "description": "ACR1222L NFC reader node library",
   "main": "acr1222l.js",
   "scripts": {
-    "example": "node example.js",
+    "example": "node example.js"
   },
   "author": "Boris Savic",
   "license": "ISC",
