@@ -44,7 +44,7 @@ To use this module read OS specific notes, then install dependencies with:
 
 For debug purposes you can turn on verbose mode with the following code:
 
-        var nfcReader = require('./acr1222l');
+        var nfcReader = require('acr1222l');
 
         nfcReader.debug();  // turn on verbose
 
@@ -67,7 +67,7 @@ Init method returns a **Promise**. Continue working with the reader only after t
 
 Sample code:
 
-        var nfcReader = require('./acr1222l');
+        var nfcReader = require('acr1222l');
 
         nfcReader.init(nfc_error_callback); //initialize
 
