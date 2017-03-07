@@ -2,9 +2,9 @@
 
 Library for easier connecting and management of ACR1222L NFC reader. This library is tested on Windows and Linux.
 
-To use this module read OS specific notes, then install dependencies with:
+To use this module read OS specific notes, then install with:
 
-    npm install
+    npm install acr1222l
 
 ## Windows installation steps
 
