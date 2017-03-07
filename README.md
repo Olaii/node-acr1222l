@@ -37,6 +37,21 @@ To use this module read OS specific notes, then install dependencies with:
         sudo service pcscd start # if not yet running
 
 
+## Use in nw.js
+
+To use the library inside nw.js project you will have to rebuild the package with `nw-gyp`. 
+
+First you need to install the `nw-gyp`. On Windows you have to run this with administrator rights.
+
+        npm install -g nw-gyp
+
+Manually rebuild the `pcsc` library. 
+
+        cd node_modules/@pokusew/pcsclite
+        
+        nw-gyp configure --target=0.20.3   // use the appropriate Nw.js version
+        nw-gyp rebuild --target=0.20.3
+
 ## Usage of the library
 
 
