@@ -9,7 +9,7 @@
   "author": "Boris Savic",
   "license": "ISC",
   "dependencies": {
-    "pcsclite": "https://github.com/boris-savic/node-pcsclite",
+    "@pokusew/pcsclite": "^0.4.17",
     "ndef": "^0.1.3"
   }
 }

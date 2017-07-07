@@ -1,1 +1,1 @@
-module.exports = require('./lib/reader');
+module.exports = require('./core/reader');
