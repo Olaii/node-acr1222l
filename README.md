@@ -16,7 +16,7 @@ To use this module read OS specific notes, then install with:
 
 3. Install Reader drivers
 
-4. Disable Windows Smart Card Plug and Play:
+4. Disable Windows Smart Card Plug and Play (optional):
 
     1. Click Start, type **gpedit.msc** in the Search programs and files box, and then press ENTER.
     2. In the console tree under **Computer Configuration**, click **Administrative Templates**.
@@ -54,14 +54,15 @@ Manually rebuild the `pcsc` library.
 
 ## Usage of the library
 
+Examples of the library usage are also available under the *examples* folder.
 
 ### Debugging
 
 For debug purposes you can turn on verbose mode with the following code:
 
-        var nfcReader = require('acr1222l');
+        var reader = require('acr1222l');
 
-        nfcReader.debug();  // turn on verbose
+        await reader.initialize(error_cb, debug=true);
 
 ### Initialization
 
@@ -72,19 +73,18 @@ error codes are:
  - READER_ERROR
  - PCSC_ERROR
 
-Other possible parameters during init are:
+Other init parameters during are:
   - **error_callback** - *function* to be called upon errors
-  - **use_fast_read** - *boolean* if the reader should send FAST_READ command or just READ
-  - **user_space_start** - *hex* default value *0x04* for NTAG213. Start page of the card user space
-  - **user_space_end** - *hex* default value *0x27* for NTAG213. End page of the card user space
+  - **debug** - *boolean* should the library output logs to console
+
 
 Init method returns a **Promise**. Continue working with the reader only after the init has completed the initialization.
 
 Sample code:
 
-        var nfcReader = require('acr1222l');
+        var reader = require('acr1222l');
 
-        nfcReader.init(nfc_error_callback); //initialize
+        reader.init(nfc_error_callback); //initialize
 
         function nfc_error_callback(err) {
             console.log('NFC ERROR CODE:', err.error_code);
@@ -100,7 +100,7 @@ Write call returns a **Promise**.
 
 Sample code:
 
-        nfcReader.writeToLCD('First line text', 'Second line text');
+        reader.writeToLCD('First line text', 'Second line text');
 
 
 ### Clear LCD screen
@@ -110,16 +110,22 @@ Clear call returns a **Promise**.
 
 Sample code:
 
-        nfcReader.clearLCD();
+        reader.clearLCD();
 
 
 ### Read NDEF data
 
-This method will invoke FAST_READ or READ command on the card, based on the *init* settings provided and return an object
+This method will invoke FAST_READ command on the card and return an object
 containing raw byte data, uuid and NDEF message.
 
 This method returns a **Promise**. It will resolve once a valid card is presented. In case the card read fails, it will continue
 reading until a successful read is completed and NDEF returned.
+
+
+Call parameters:
+  - **addr_start** - *hex* - Start address on the card. Defaults to 0x04
+  - **addr_end** - *hex* - End address on the card. Defaults to 0x27
+
 
 Return object:
 
@@ -132,34 +138,102 @@ Return object:
 
 Sample code:
 
-        ndef.readNDEF().then(function(data) {
+        reader.readNDEF(addr_start=0x04, addr_end=0x27).then(function(data) {
             console.log('NDEF', data.ndef);
             console.log('UUID', data.uuid);
         });
+
+or with async/await
+
+        const data = reader.readNDEF(addr_start=0x04, addr_end=0x27)
+        
+        console.log('NDEF', data.ndef);
+        console.log('UUID', data.uuid);
 
 ### Stop NDEF read
 
 To stop the read process. Returns a **Promise**.
 
-        ndef.stopNDEFRead()
+        reader.stopNDEFRead()
 
 ### Read UUID
 
 Read card UUID.
 Returns a **Promise** of a <Buffer>.
 
-        ndef.readUUID();
+        reader.readUUID();
 
 ### Stop UUID read
 
 To stop the read process. Returns a **Promise**.
 
-        ndef.stopUUIDRead()
+        reader.stopUUIDRead()
 
 ### Turn on/off the backlight
 
 Returns a **Promise**.
 
-        ndef.backlightON();
+        reader.turnOnBacklight();
 
-        ndef.backlightOFF();
+        reader.turnOffBacklight();
+
+
+### Authenticate
+
+Will issue an authenticate call to the card (0x1b). Upon successful authentication the function call will return 
+a 2 byte PACK. If the authentication has failed error will be thrown. 
+
+Call parameters:
+  - **pwd** - *Buffer* - card password
+
+        await reader.authenticate(Buffer([0xFF, 0xFF, 0xFF, 0xFE]));
+   
+    
+### Read Bytes
+
+Should you need to read bytes directly from the card.
+
+Call parameters:
+  - **addr** - *hex* - start address
+  - **num_bytes** - *int* - number of bytes to read. Usually set to 16 for a single read. 
+
+
+        // Read 16 bytes
+        const data = await reader.readBytes(addr=0x04, num_bytes=16)
+          
+        
+### Stop Read Bytes
+
+Read bytes will wait until there is a card present. To stop reading call this function.
+
+        await reader.stopReadBytes()
+        
+
+### Fast Read 
+
+Read all bytes between two addresses.
+
+Call parameters:
+  - **addr_start** - *hex* - start addr
+  - **addr_end** - *hex* - end addr
+
+        const data = await reader.fastRead(addr_start=0x04, addr_end=0x27)
+
+### Write Buffer
+
+Write bytes to the card.
+
+Call parameters:
+  - **buffer** - *hex* - bytes to write - usually 8
+  - **addr** - *hex* - start address where to write
+
+        await reader.writeBuffer(buff, addr)
+
+
+### Stop Write Buffer
+
+Write will wait for the card to be present. To stop call this function
+
+        await reader.stopWriteBuffer()
+
+        
