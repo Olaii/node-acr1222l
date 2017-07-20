@@ -246,14 +246,16 @@ const service = {
         return true;
     },
 
-    readBytes: async function(addr, num_bytes=4) {
-        logger.log('Read ' + num_bytes + ' on addr:', addr)
+    readBytes: async function(addr, num_bytes=4, wait_for_card=false) {
+        logger.log('Read ' + num_bytes + ' on addr:', addr);
 
-        if(!service.cardPresent) {
+        if(!service.cardPresent && wait_for_card) {
             return new Promise(function(resolve, reject) {
                 // Wait for the card to be attached
                 service.waitingRequests.readBytesRequest = {resolve: resolve, reject: reject, func: service.readBytes, params: [addr, num_bytes]}
             });
+        } else if(!service.cardPresent && wait_for_card === false) {
+            throw new AppError('Card not present!', status='CARD_NOT_PRESENT')
         }
 
         await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
@@ -290,6 +292,7 @@ const service = {
         if(pack[2] === 0x00) {
             logger.log('Authentication successful. PACK: ', pack.slice(3, 5));
         } else {
+            await service.disconnect();
             logger.log('Wrong PWD. Authentication failed!');
             throw new AppError('Wrong password. Authentication failed!', status='WRONG_PASSWORD');
         }
