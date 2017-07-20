@@ -1,6 +1,7 @@
 const pcsc = require('@pokusew/pcsclite')();
 const reader_util = require('./reader_util');
 const logger = require('./logger');
+const AppError = require('./exceptions');
 
 
 const service = {
@@ -203,10 +204,10 @@ const service = {
             logger.log('Write successful');
         } else if(response[0] === 0xfe) {
             logger.log('Write failed. Card is locked!');
-            throw new Error('Write failed. Card is locked!');
+            throw new AppError('Write failed. Card is locked!', status='CARD_LOCKED');
         } else {
             logger.log('Write failed with error code: ', response[0]);
-            throw new Error('Write failed with Error code: ' + response[0])
+            throw new AppError('Write failed with Error code: ' + response[0], 'WRITE_FAILED')
         }
 
         return true
@@ -263,7 +264,7 @@ const service = {
         if(response.slice(-2,-1)[0] === 0x90) {
             logger.log('Read bytes successful');
         } else {
-            throw new Error('Read bytes failed!')
+            throw new AppError('Read bytes failed!', status='READ_FAILED')
         }
 
         return response.slice(0, -2);
@@ -280,7 +281,7 @@ const service = {
         logger.log('Authenticated called');
 
         if(!service.cardPresent) {
-            throw new Error('Cant authenticate as the card is not present');
+            throw new AppError('Cant authenticate as the card is not present', status='CARD_NOT_PRESENT');
         }
 
         await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
@@ -289,8 +290,8 @@ const service = {
         if(pack[2] === 0x00) {
             logger.log('Authentication successful. PACK: ', pack.slice(3, 5));
         } else {
-            logger.log('Authentication failed!');
-            throw new Error('Authentication failed!');
+            logger.log('Wrong PWD. Authentication failed!');
+            throw new AppError('Wrong password. Authentication failed!', status='WRONG_PASSWORD');
         }
 
         return pack.slice(3, 5);
@@ -338,7 +339,7 @@ const service = {
         if(response[2] === 0x00) {
             response = response.slice(3, -2);
         } else {
-            throw new Error('FAST_READ command failed.')
+            throw new AppError('FAST_READ command failed.', status='FAST_READ_FAILED')
         }
 
         return response
