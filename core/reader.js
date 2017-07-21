@@ -292,7 +292,6 @@ const service = {
         if(pack[2] === 0x00) {
             logger.log('Authentication successful. PACK: ', pack.slice(3, 5));
         } else {
-            await service.disconnect();
             logger.log('Wrong PWD. Authentication failed!');
             throw new AppError('Wrong password. Authentication failed!', status='WRONG_PASSWORD');
         }
