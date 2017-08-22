@@ -1,4 +1,4 @@
-const pcsc = require('@pokusew/pcsclite')();
+let pcsc = require('@pokusew/pcsclite');
 const reader_util = require('./reader_util');
 const logger = require('./logger');
 const AppError = require('./exceptions');
@@ -16,6 +16,7 @@ const service = {
 
     initialize: async function(error_callback, debug=false) {
         return new Promise(function(resolve, reject) {
+
             logger.debug = debug;
 
             if(service.initialized) {
@@ -23,7 +24,7 @@ const service = {
             }
 
             service.initialized = true;
-
+            pcsc = pcsc();
             pcsc.on('error', function(err) {
                 logger.log('PCSC Error occured:', err);
                 error_callback({error: err, error_code:'PCSC_ERROR'});
