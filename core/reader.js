@@ -1,6 +1,7 @@
 let pcsc = require('@pokusew/pcsclite');
 const reader_util = require('./reader_util');
 const logger = require('./logger');
+const des = require('./DESede');
 const AppError = require('./exceptions');
 
 
@@ -280,7 +281,7 @@ const service = {
         return true;
     },
 
-    authenticate: async function(pwd) {
+    authenticateNTAG: async function(pwd) {
         logger.log('Authenticated called');
 
         if(!service.cardPresent) {
@@ -300,6 +301,39 @@ const service = {
         return pack.slice(3, 5);
     },
 
+    authenticateUltralightC: async function(keys) {
+        logger.log('Authenticated called');
+
+        if(!service.cardPresent) {
+            throw new AppError('Cant authenticate as the card is not present', status='CARD_NOT_PRESENT');
+        }
+
+        await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
+
+        des.init(keys);
+        let rndA = Buffer.alloc(8);
+        for(var i=0; i < rndA.length; i++){
+           rndA[i] = Math.floor(Math.random()*256);
+        }
+
+        let hcRndB = await service.transmit(reader_util.wrapCmd(0x1A));
+        let rndB = des.decrypt(hcRndB.slice(1, hcRndB.length));
+        let rndBr = service._rotateLeft(rndB);
+
+        let rndArndBr = Buffer.concat([rndA, rndBr])
+        let cRndArndBr = des.encrypt(rndArndBr);
+
+        let hcRndAr = await service.transmit(reader_util.wrapCmd(0xAF, cRndArndBr));
+        let rndAr = des.decrypt(hcRndAr.slice(1, hcRndAr.length));
+        let rndA2 = service._rotateRight(rndAr);
+
+        if(Buffer.compare(rndA, rndA2) != 0){
+            logger.log('Wrong PWD. Authentication failed!');
+            throw new AppError('Wrong password. Authentication failed!', status='WRONG_PASSWORD');
+        }
+
+        return;
+    },
 
     readNDEF: async function(addr_start=0x04, addr_end=0x27) {
         if(!service.cardPresent) {
@@ -332,7 +366,6 @@ const service = {
         return true;
     },
 
-
     fastRead: async function(addr_start=0x04, addr_end=0x27) {
         logger.log('FastRead Requested from page: ' + addr_start + ' to page: ' + addr_end);
 
@@ -348,6 +381,27 @@ const service = {
         return response
     }
 
+    _rotateLeft: function(array){
+        let ret = Buffer.from(array);
+
+        for(var i=1; i<array.length; i++){
+            ret[i-1] = ret[i];
+        }
+
+        ret[ret.length-1]=array[0];
+        return ret;
+    }
+
+    _rotateRight: function(array){
+        let ret = Buffer.from(array);
+
+        for(var i=array.length-2; i >= 0; i--){
+            ret[i+1] = ret[i];
+        }
+
+        ret[0]=array[ret.length-1];
+        return ret;
+    }
 };
 
 
