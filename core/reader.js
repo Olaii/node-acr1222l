@@ -281,6 +281,10 @@ const service = {
         return true;
     },
 
+    authenticate: async function(pwd) {
+        return await authenticateNTAG(pwd);
+    },
+
     authenticateNTAG: async function(pwd) {
         logger.log('Authenticated called');
 

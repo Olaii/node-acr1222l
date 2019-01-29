@@ -31,7 +31,11 @@ To use this module read OS specific notes, then install with:
 
         sudo apt-get install libpcsclite-dev pcscd
 
-2. Then check that pcscd is running:
+2. Install drivers:
+
+        https://www.acs.com.hk/download-driver-unified/10312/ACS-Unified-PKG-Lnx-116-P.zip
+
+3. Then check that pcscd is running:
 
         sudo service pcscd status
         sudo service pcscd start # if not yet running
@@ -39,16 +43,16 @@ To use this module read OS specific notes, then install with:
 
 ## Use in nw.js
 
-To use the library inside nw.js project you will have to rebuild the package with `nw-gyp`. 
+To use the library inside nw.js project you will have to rebuild the package with `nw-gyp`.
 
 First you need to install the `nw-gyp`. On Windows you have to run this with administrator rights.
 
         npm install -g nw-gyp
 
-Manually rebuild the `pcsc` library. 
+Manually rebuild the `pcsc` library.
 
         cd node_modules/@pokusew/pcsclite
-        
+
         nw-gyp configure --target=0.20.3   // use the appropriate Nw.js version
         nw-gyp rebuild --target=0.20.3
 
@@ -146,7 +150,7 @@ Sample code:
 or with async/await
 
         const data = reader.readNDEF(addr_start=0x04, addr_end=0x27)
-        
+
         console.log('NDEF', data.ndef);
         console.log('UUID', data.uuid);
 
@@ -180,36 +184,36 @@ Returns a **Promise**.
 
 ### Authenticate
 
-Will issue an authenticate call to the card (0x1b). Upon successful authentication the function call will return 
-a 2 byte PACK. If the authentication has failed error will be thrown. 
+Will issue an authenticate call to the card (0x1b). Upon successful authentication the function call will return
+a 2 byte PACK. If the authentication has failed error will be thrown.
 
 Call parameters:
   - **pwd** - *Buffer* - card password
 
         await reader.authenticate(Buffer([0xFF, 0xFF, 0xFF, 0xFE]));
-   
-    
+
+
 ### Read Bytes
 
 Should you need to read bytes directly from the card.
 
 Call parameters:
   - **addr** - *hex* - start address
-  - **num_bytes** - *int* - number of bytes to read. Usually set to 16 for a single read. 
+  - **num_bytes** - *int* - number of bytes to read. Usually set to 16 for a single read.
 
 
         // Read 16 bytes
         const data = await reader.readBytes(addr=0x04, num_bytes=16)
-          
-        
+
+
 ### Stop Read Bytes
 
 Read bytes will wait until there is a card present. To stop reading call this function.
 
         await reader.stopReadBytes()
-        
 
-### Fast Read 
+
+### Fast Read
 
 Read all bytes between two addresses.
 
@@ -235,5 +239,3 @@ Call parameters:
 Write will wait for the card to be present. To stop call this function
 
         await reader.stopWriteBuffer()
-
-        
