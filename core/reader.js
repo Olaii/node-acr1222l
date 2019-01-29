@@ -353,7 +353,14 @@ const service = {
                 data = await service.fastRead(addr_start, addr_end);
             } catch(err){
                 logger.log('FAST_READ command failed. Retrying with READ command');
-                data = await service.readBytes(addr_start, 4, false);
+                await service.transmit(Buffer([0xD4, 0x54, 0x01])); // WUPA
+
+                data = Buffer.alloc(0);
+                let addr = addr_start;
+                for(; addr <= addr_end; addr++){
+                    let read = await service.readBytes(addr, 4, false);
+                    data = Buffer.concat([data, read]);
+                }
             }
 
             const response = await reader_util.getNDEFData(data);
