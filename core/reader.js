@@ -379,7 +379,7 @@ const service = {
         }
 
         return response
-    }
+    },
 
     _rotateLeft: function(array){
         let ret = Buffer.from(array);
@@ -390,7 +390,7 @@ const service = {
 
         ret[ret.length-1]=array[0];
         return ret;
-    }
+    },
 
     _rotateRight: function(array){
         let ret = Buffer.from(array);
@@ -401,7 +401,7 @@ const service = {
 
         ret[0]=array[ret.length-1];
         return ret;
-    }
+    },
 };
 
 
