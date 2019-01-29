@@ -348,7 +348,14 @@ const service = {
         }
 
         try {
-            const data = await service.fastRead(addr_start, addr_end);
+            let data = null;
+            try {
+                data = await service.fastRead(addr_start, addr_end);
+            } catch(err){
+                logger.log('FAST_READ command failed. Retrying with READ command');
+                data = await service.readBytes(addr_start, 4, false);
+            }
+
             const response = await reader_util.getNDEFData(data);
             response.uuid_bytes = await service.readUUID();
             response.uuid = response.uuid_bytes.toString('hex').toUpperCase();
