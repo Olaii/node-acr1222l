@@ -315,20 +315,21 @@ const service = {
         await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
 
         des.init(keys);
+
         let rndA = Buffer.alloc(8);
         for(var i=0; i < rndA.length; i++){
            rndA[i] = Math.floor(Math.random()*256);
         }
 
-        let hcRndB = await service.transmit(reader_util.wrapCmd(0x1A, Buffer.alloc(0)));
-        let rndB = des.decrypt(hcRndB.slice(1, hcRndB.length));
+        let hcRndB = await service.transmit(reader_util.wrapCmd(0x1A, Buffer.alloc(1)));
+        let rndB = des.decrypt(hcRndB.slice(4, -2));
         let rndBr = service._rotateLeft(rndB);
 
         let rndArndBr = Buffer.concat([rndA, rndBr])
         let cRndArndBr = des.encrypt(rndArndBr);
 
         let hcRndAr = await service.transmit(reader_util.wrapCmd(0xAF, cRndArndBr));
-        let rndAr = des.decrypt(hcRndAr.slice(1, hcRndAr.length));
+        let rndAr = des.decrypt(hcRndAr.slice(4, -2));
         let rndA2 = service._rotateRight(rndAr);
 
         if(Buffer.compare(rndA, rndA2) != 0){
