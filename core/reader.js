@@ -404,6 +404,12 @@ const service = {
 
         let response = await service.transmit(reader_util.wrapCmd(0x60, Buffer.alloc(0)));
 
+        if(response[2] === 0x00) {
+            response = response.slice(3, -2);
+        } else {
+            throw new AppError('GET_VERSION command failed.', status='GET_VERSION_FAILED')
+        }
+
         return response
     },
 
