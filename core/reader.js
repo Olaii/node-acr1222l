@@ -399,6 +399,14 @@ const service = {
         return response
     },
 
+    getVersion: async function() {
+        logger.log('GET_VERSION Requested!');
+
+        let response = await service.transmit(reader_util.wrapCmd(0x60));
+
+        return response
+    },
+
     _rotateLeft: function(array){
         let ret = Buffer.from(array);
 
