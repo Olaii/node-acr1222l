@@ -320,7 +320,7 @@ const service = {
            rndA[i] = Math.floor(Math.random()*256);
         }
 
-        let hcRndB = await service.transmit(reader_util.wrapCmd(0x1A));
+        let hcRndB = await service.transmit(reader_util.wrapCmd(0x1A, Buffer.alloc(0)));
         let rndB = des.decrypt(hcRndB.slice(1, hcRndB.length));
         let rndBr = service._rotateLeft(rndB);
 
@@ -402,7 +402,7 @@ const service = {
     getVersion: async function() {
         logger.log('GET_VERSION Requested!');
 
-        let response = await service.transmit(reader_util.wrapCmd(0x60));
+        let response = await service.transmit(reader_util.wrapCmd(0x60, Buffer.alloc(0)));
 
         return response
     },
