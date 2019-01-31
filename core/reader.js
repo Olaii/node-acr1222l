@@ -262,7 +262,7 @@ const service = {
 
         await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
 
-        let response = Buffer(await service.transmit(reader_util.CMD_READ_BYTES(addr, num_bytes)));
+        let response = Buffer.from(await service.transmit(reader_util.CMD_READ_BYTES(addr, num_bytes)));
 
 
         if(response.slice(-2,-1)[0] === 0x90) {
@@ -354,7 +354,7 @@ const service = {
                 data = await service.fastRead(addr_start, addr_end);
             } catch(err){
                 logger.log('FAST_READ command failed. Retrying with READ command');
-                await service.transmit(Buffer([0xD4, 0x54, 0x01])); // WUPA
+                await service.transmit(Buffer.from([0xD4, 0x54, 0x01])); // WUPA
 
                 data = Buffer.alloc(0);
                 let addr = addr_start;
@@ -389,7 +389,7 @@ const service = {
         logger.log('FastRead Requested from page: ' + addr_start + ' to page: ' + addr_end);
 
         await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
-        let response = await service.transmit(reader_util.wrapCmd(0x3A, Buffer([addr_start, addr_end])));
+        let response = await service.transmit(reader_util.wrapCmd(0x3A, Buffer.from([addr_start, addr_end])));
 
         if(response[2] === 0x00) {
             response = response.slice(3, -2);

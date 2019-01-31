@@ -34,13 +34,13 @@ const service = {
 
 
     // Reader Commands
-    CMD_BACKLIGHT_ON: new Buffer([0xFF, 0x00, 0x64, 0xFF, 0x00]),
-    CMD_BACKLIGHT_OFF: new Buffer([0xFF, 0x00, 0x64, 0x00, 0x00]),
-    CMD_READ_UUID: new Buffer([0xFF, 0xCA, 0x00, 0x00, 0x00]),
+    CMD_BACKLIGHT_ON: Buffer.from([0xFF, 0x00, 0x64, 0xFF, 0x00]),
+    CMD_BACKLIGHT_OFF: Buffer.from([0xFF, 0x00, 0x64, 0x00, 0x00]),
+    CMD_READ_UUID: Buffer.from([0xFF, 0xCA, 0x00, 0x00, 0x00]),
 
-    CMD_WRITE: function(buffer, addr) { return Buffer([0xFF, 0xD6, 0x00, addr, buffer.length, ...buffer]); },
+    CMD_WRITE: function(buffer, addr) { return Buffer.from([0xFF, 0xD6, 0x00, addr, buffer.length, ...buffer]); },
 
-    CMD_READ_BYTES: function(addr, num_bytes) { return Buffer([0xFF, 0xB0, 0x00, addr, num_bytes]) },
+    CMD_READ_BYTES: function(addr, num_bytes) { return Buffer.from([0xFF, 0xB0, 0x00, addr, num_bytes]) },
 
 
     getLCDTextCmd: function(text, row_num=1) {
@@ -50,7 +50,7 @@ const service = {
 
         const row_cmd = row_num === 1 ? 0x00 : 0x40;
 
-        return Buffer.concat([Buffer([0xFF, 0x00, 0x68, row_cmd]), len, txt]);
+        return Buffer.concat([Buffer.from([0xFF, 0x00, 0x68, row_cmd]), len, txt]);
     },
 
     performCardPresentCallbacks(waitingRequests) {
@@ -77,7 +77,7 @@ const service = {
          Password >> 16,
          Password >> 24,
          };*/
-        return new Buffer([0xFF, 0x00, 0x00, 0x00, dataIn.length + 3, 0xD4, 0x42, cmd, ...dataIn]);
+        return Buffer.from([0xFF, 0x00, 0x00, 0x00, dataIn.length + 3, 0xD4, 0x42, cmd, ...dataIn]);
     },
 
     getNDEFData: async function(data) {
