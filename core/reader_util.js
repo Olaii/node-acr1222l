@@ -80,28 +80,38 @@ const service = {
         return Buffer.from([0xFF, 0x00, 0x00, 0x00, dataIn.length + 3, 0xD4, 0x42, cmd, ...dataIn]);
     },
 
+
     getNDEFData: async function(data) {
-        if (data.indexOf(0xd1) === -1) {
+        if (data.indexOf(0x03) === -1) {
             throw new Error('Bytes do no not contain NDEF message!');
         } else {
             let end_terminator = 0xfe;
             if (data.indexOf(0xfe) === -1) {
                 end_terminator = 0x00;
             }
-            const ndef_data = data.slice(data.indexOf(0xd1), data.indexOf(end_terminator)).toJSON();
-            const record = ndef.decodeMessage(ndef_data.data)[0];
 
-            if (record.tnf === ndef.TNF_WELL_KNOWN && record.type[0] === ndef.RTD_TEXT[0]) {
-                const ndef_value = ndef.text.decodePayload(record.payload);
-
-                return {
-                    original_bytes: data,
-                    ndef: ndef_value
-                };
-
-            } else {
-                throw new Error('Unknown NDEF message');
+            const indexes = []
+            for (let i=0; i<data.length; i++) {
+                if (data[i] == 0x03) {
+                    indexes.push(i);
+                }
             }
+
+            for (let i=0; i<indexes.length; i++) {
+                const ndef_data = data.slice(indexes[i]+2, data.indexOf(end_terminator)).toJSON();
+                const record = ndef.decodeMessage(ndef_data.data)[0];
+
+                if (record.tnf === ndef.TNF_WELL_KNOWN && record.type[0] === ndef.RTD_TEXT[0]) {
+                    const ndef_value = ndef.text.decodePayload(record.payload);
+
+                    return {
+                        original_bytes: data,
+                        ndef: ndef_value
+                    };
+                }
+            }
+
+            throw new Error('Unknown NDEF message');
         }
 
 

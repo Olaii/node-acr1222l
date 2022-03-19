@@ -21,7 +21,7 @@ async function main() {
     await reader.initialize(error_cb, debug=true);
 
     // Read Card UUID. It will wait until the card is present.
-    const ndef_obj = await reader.readNDEF(addr_start=0x04, addr_end=0x20);
+    const ndef_obj = await reader.readNDEF(addr_start=0x04, addr_end=0x0C);
     console.log(ndef_obj);
     await reader.writeToLCD('Card Message:', ndef_obj.ndef);
 
