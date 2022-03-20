@@ -3,7 +3,7 @@ const service = {
 
     log: function(message, ...args) {
         if(service.debug) {
-            console.log('[ACR1222L]' + message, ...args)
+            console.log('[ACR1222L] ' + message, ...args)
         }
     }
 };
