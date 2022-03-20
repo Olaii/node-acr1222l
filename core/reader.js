@@ -34,7 +34,7 @@ const service = {
 
             pcsc.on('reader', function(reader) {
                 if (reader_util.isValidReader(reader)) {
-                    logger.log('Reader found: ', reader.name);
+                    logger.log('Reader found:', reader.name);
 
                     // Status handler
                     reader.on('status', function(status) {
@@ -49,7 +49,7 @@ const service = {
 
                     // Reader error handler
                     reader.on('error', function (err) {
-                        logger.log('Reader error occured: ', err);
+                        logger.log('Reader error occured:', err);
                         error_callback({error: err, error_code: 'READER_ERROR'});
                     });
 
@@ -93,7 +93,7 @@ const service = {
                     logger.log('Error connecting with reader:', err);
                     reject(err)
                 } else {
-                    logger.log('Connected with protocol: ', protocol);
+                    logger.log('Connected with protocol:', protocol);
                     service.connectionProtocol = protocol;
 
                     resolve(protocol);
@@ -108,7 +108,7 @@ const service = {
             return new Promise(function(resolve, reject) {
                 service.reader.disconnect(service.reader.SCARD_LEAVE_CARD, function (err) {
                     if (err) {
-                        logger.log('Error disconnecting: ', err.message);
+                        logger.log('Error disconnecting:', err.message);
                         reject(err);
                     } else {
                         logger.log('Disconnected');
@@ -190,7 +190,7 @@ const service = {
     },
 
     writeBuffer: async function(buffer, addr) {
-        logger.log('Write Buffer requested. Buffer: ', buffer);
+        logger.log('Write Buffer requested. Buffer:', buffer);
 
         if(!service.cardPresent) {
             return new Promise(function(resolve, reject) {
@@ -208,7 +208,7 @@ const service = {
             logger.log('Write failed. Card is locked!');
             throw new AppError('Write failed. Card is locked!', status='CARD_LOCKED');
         } else {
-            logger.log('Write failed with error code: ', response[0]);
+            logger.log('Write failed with error code:', response[0]);
             throw new AppError('Write failed with Error code: ' + response[0], 'WRITE_FAILED')
         }
 
@@ -236,7 +236,7 @@ const service = {
         let uuid = await service.transmit(reader_util.CMD_READ_UUID);
 
         uuid = uuid.slice(0, -2);
-        logger.log('Card UUID Read: ', uuid);
+        logger.log('Card UUID Read:', uuid);
 
         return uuid
     },
@@ -296,7 +296,7 @@ const service = {
         let pack = await service.transmit(reader_util.wrapCmd(0x1b, pwd));
 
         if(pack[2] === 0x00) {
-            logger.log('Authentication successful. PACK: ', pack.slice(3, 5));
+            logger.log('Authentication successful. PACK:', pack.slice(3, 5));
         } else {
             logger.log('Wrong PWD. Authentication failed!');
             throw new AppError('Wrong password. Authentication failed!', status='WRONG_PASSWORD');

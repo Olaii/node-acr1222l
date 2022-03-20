@@ -8,7 +8,7 @@ const reader = require('../acr1222l');
 
 
 function error_cb(err) {
-    console.log('Something went horribly wrong: ', err);
+    console.log('Something went wrong:', err);
 }
 
 function sleep(ms) {
@@ -31,6 +31,7 @@ async function main() {
     // To stop the NDEF Read if card is not presented in time - let's say you want to stop from the GUI
     await reader.stopNDEFRead();
 
+    main();
 }
 
 

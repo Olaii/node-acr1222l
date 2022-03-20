@@ -10,7 +10,7 @@ const reader = require('../acr1222l');
 
 
 function error_cb(err) {
-    console.log('Something went horribly wrong: ', err);
+    console.log('Something went wrong:', err);
 }
 
 function sleep(ms) {
@@ -22,7 +22,7 @@ async function authenticate(password) {
         const pack = await reader.authenticate(password);
         await reader.writeToLCD('PACK:', pack.toString('hex'));
     } catch (err) {
-        console.log('Err msg: ', err.message);
+        console.log('Error message:', err.message);
         await reader.writeToLCD('Auth failed!', err.message)
     }
 
