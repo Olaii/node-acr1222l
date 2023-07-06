@@ -7,8 +7,14 @@
 const reader = require('../acr1222l');
 
 
-function error_cb(err) {
+async function error_cb(err) {
+   
     console.log('Something went wrong:', err);
+    if(err.error_code == 'READER_REMOVED') {
+        reader.closePCSC();
+        await reader.initialize(error_cb, debug=true);
+    }
+    
 }
 
 function sleep(ms) {
@@ -18,20 +24,24 @@ function sleep(ms) {
 
 async function main() {
     // First let's initialize the reader. We will use the debug mode, so we can see the log output in console
-    await reader.initialize(error_cb, debug=true);
+    while(true) {
+        await reader.initialize(error_cb, debug=true);
 
-    // Read Card UUID. It will wait until the card is present.
-    const uuid = await reader.readUUID();
-    await reader.writeToLCD('Card UUID:', uuid.toString('hex'));
+        // Read Card UUID. It will wait until the card is present.
+        try {
+            console.log("new loop");
+            const uuid = await reader.readUUID();
+            reader.writeToLCD('Card UUID:', uuid.toString('hex'));
+            await reader.writeToLCD('Card UUID:', uuid.toString('hex'));
 
-    await sleep(2000);
-    await reader.clearLCD();
+            await sleep(2000);
+            await reader.clearLCD();
+        }catch(err){
+            console.log("ERRRRRRRRRRRRRRRRRRRRRRRRRR")
+        }
+    }
+    
 
-
-    // To stop the UUID Read if card is not presented in time - let's say you want to stop from the GUI
-    await reader.stopReadUUID();
-
-    main();
 }
 
 
