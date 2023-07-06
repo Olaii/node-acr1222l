@@ -45,15 +45,18 @@ const service = {
 
  
                     // Reader removed handler
-                    reader.on('end', function() {
+                    reader.on('end', async function() {
                         logger.log('Reader removed - reader end');
                         
                         service.reader = null;
                         service.cardPresent = false;
                         service.commandInProgress = false;
                         reader.close();
-
+                        
                         error_callback({error: new Error('Reader removed'), error_code: 'READER_REMOVED'})
+                        service.closePCSC();
+                        await service.initialize(error_callback, debug);
+                        
                     });
 
                     // Reader error handler
