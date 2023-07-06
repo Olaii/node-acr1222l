@@ -8,11 +8,13 @@ const AppError = require('./exceptions');
 const service = {
     initialized: false,
     reader: null,
-
+    pcsc_instance: null,
     connectionProtocol: null,
 
     cardPresent: false,
     waitingRequests: {},
+
+    commandInProgress: false,
 
 
     initialize: async function(error_callback, debug=false) {
@@ -25,43 +27,84 @@ const service = {
             }
 
             service.initialized = true;
-            pcsc = pcsc();
-            pcsc.on('error', function(err) {
+            service.pcsc_instance = pcsc();
+            
+            service.pcsc_instance.on('error', function(err) {
                 logger.log('PCSC Error occured:', err);
                 error_callback({error: err, error_code:'PCSC_ERROR'});
-                pcsc.close();
             });
 
-            pcsc.on('reader', function(reader) {
+            service.pcsc_instance.on('reader', function(reader) {
                 if (reader_util.isValidReader(reader)) {
-                    logger.log('Reader found:', reader.name);
+                    logger.log('Reader found: ', reader.name);
 
                     // Status handler
                     reader.on('status', function(status) {
                         service.handleStatusChange(status);
                     });
 
+ 
                     // Reader removed handler
                     reader.on('end', function() {
-                        logger.log('Reader removed');
+                        logger.log('Reader removed - reader end');
+                        
+                        service.reader = null;
+                        service.cardPresent = false;
+                        service.commandInProgress = false;
+                        reader.close();
+
                         error_callback({error: new Error('Reader removed'), error_code: 'READER_REMOVED'})
                     });
 
                     // Reader error handler
                     reader.on('error', function (err) {
                         logger.log('Reader error occured:', err);
+
+                        //service.reader = null;
+                        service.cardPresent = false;
+                        service.commandInProgress = false;
+                        //reader.close();
+
                         error_callback({error: err, error_code: 'READER_ERROR'});
                     });
 
                     // Resolve init at this point
                     logger.log('Init completed');
                     service.reader = reader;
-
+                    
                     return resolve();
                 } // end if validReader
+                else {
+                    // close all other invalid readers
+                    reader.close();
+                }
             }); // end pcsc.on('reader')
         }); // end Promise
     }, // end initialize function
+
+    hasReader() {
+        /*
+        * Is the NFC Reader present
+        */
+        return service.reader ? true : false;
+    },
+
+    closePCSC() {
+        /*
+        * Stop the PCSC service, clear resources and set as unitilizalized.
+        */
+        service.pcsc_instance.close();
+        service.initialized = false;
+        service.reader = null,
+        service.pcsc_instance = null,
+        service.connectionProtocol = null,
+
+        service.cardPresent = false;
+        reader_util.rejectWaitingRequestsCallbacks(service.waitingRequests);
+        service.waitingRequests = {};
+
+        service.commandInProgress = false;
+    },
 
     handleStatusChange: async function(status) {
         const changes = service.reader.state ^ status.state;
@@ -69,18 +112,20 @@ const service = {
         if (service.reader.state && (changes & service.reader.SCARD_STATE_EMPTY) && (status.state & service.reader.SCARD_STATE_EMPTY)) {
             logger.log('Card removed');
             service.cardPresent = false;
-            if (service.reader.connected) {
-                await service.disconnect();
-            }
+            await service._disconnect();
         } else if ((changes & service.reader.SCARD_STATE_PRESENT) && (status.state & service.reader.SCARD_STATE_PRESENT)) {
             logger.log('Card present');
             service.cardPresent = true;
-
-            reader_util.performCardPresentCallbacks(service.waitingRequests);
+            try{
+                await service._connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
+                reader_util.performCardPresentCallbacks(service.waitingRequests);
+            }catch(err) {
+                logger.log("Card present ERROR CONNECTING", err)
+            }
         }
     },
 
-    connect: async function(share_mode, protocol) {
+    _connect: async function(share_mode, protocol) {
         logger.log('Connect requested with SHARE_MODE=' + share_mode  + ' and PROTOCOL=' + protocol);
 
         if(service.reader.connected) {
@@ -100,9 +145,10 @@ const service = {
                 }
             });
         });
+        
     },
 
-    disconnect: async function() {
+    _disconnect: async function() {
         if(service.reader.connected) {
 
             return new Promise(function(resolve, reject) {
@@ -120,11 +166,14 @@ const service = {
             });
         }
         logger.log('Reader was not connected');
-        return true;
+        return true;   
     },
 
     transmitControl: async function(cmd) {
         return new Promise(function(resolve, reject) {
+            if(!service.reader) {
+                reject(new Error("Reader not connected"))
+            }
             service.reader.control(cmd, service.reader.SCARD_CTL_CODE(3500), 40, function(err, data){
                 if (err) {
                     reject(err);
@@ -137,6 +186,9 @@ const service = {
 
     transmit: async function(cmd) {
         return new Promise(function(resolve, reject) {
+            if(!service.reader) {
+                reject(new Error("Reader not connected"))
+            }
             service.reader.transmit(cmd, 1024, service.connectionProtocol, function(err, data){
                 if (err) {
                     reject(err);
@@ -147,46 +199,55 @@ const service = {
         });
     },
 
-    turnOnBacklight: async function() {
-        logger.log('Turning ON Backlight');
-        await service.connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
-        await service.transmitControl(reader_util.CMD_BACKLIGHT_ON);
-        await service.disconnect();
+    _wrapCommands: async function(cmds) {
+        if(service.commandInProgress) {
+            return false;
+        }
 
+        service.commandInProgress = true;
+        let needsDisconnect = false;
+        if(service.reader && !service.reader.connected) {
+            await service._connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
+            needsDisconnect = true;
+        }
+    
+        try {
+            for(let i=0; i < cmds.length; i++) {
+                await service.transmitControl(cmds[i]);
+            }
+        }catch(err){
+            logger.log("Error while transmitting command", err)
+            service.commandInProgress = false;
+    
+            return false;
+        }
+
+        if(needsDisconnect) {
+            await service._disconnect();
+        }
+        service.commandInProgress = false;
+    
         return true;
+    },
+
+    turnOnBacklight: async function() {
+        return await service._wrapCommands([reader_util.CMD_BACKLIGHT_ON]);
     },
 
     turnOffBacklight: async function() {
-        logger.log('Turning OFF Backlight');
-        await service.connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
-        await service.transmitControl(reader_util.CMD_BACKLIGHT_OFF);
-        await service.disconnect();
-
-        return true;
+        return await service._wrapCommands([reader_util.CMD_BACKLIGHT_OFF]);
     },
 
     writeToLCD: async function(row1='', row2='') {
-        logger.log('Writing to LCD');
-        await service.connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
-        await service.transmitControl(reader_util.CMD_BACKLIGHT_ON);
-
-        await service.transmitControl(reader_util.getLCDTextCmd(row1, 1));
-        await service.transmitControl(reader_util.getLCDTextCmd(row2, 2));
-
-        await service.disconnect();
-
-        return true;
+        return await service._wrapCommands([reader_util.CMD_BACKLIGHT_ON,
+                                            reader_util.getLCDTextCmd(row1, 1),
+                                            reader_util.getLCDTextCmd(row2, 2)]);
     },
 
     clearLCD: async function() {
-        logger.log('Clearing LCD');
-        await service.connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
-        await service.transmitControl(reader_util.CMD_BACKLIGHT_OFF);
-        await service.transmitControl(reader_util.getLCDTextCmd(' ', 1));
-        await service.transmitControl(reader_util.getLCDTextCmd(' ', 2));
-
-        await service.disconnect();
-
+        return await service._wrapCommands([reader_util.CMD_BACKLIGHT_OFF,
+                                            reader_util.getLCDTextCmd(' ', 1),
+                                            reader_util.getLCDTextCmd(' ', 2)]);       
     },
 
     writeBuffer: async function(buffer, addr) {
@@ -199,7 +260,6 @@ const service = {
             });
         }
 
-        await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
         let response = await service.transmit(reader_util.CMD_WRITE(buffer, addr));
 
         if(response[0] === 0x90) {
@@ -231,14 +291,12 @@ const service = {
                 service.waitingRequests.readUUIDRequest = {resolve: resolve, reject: reject, func: service.readUUID, params: []}
             });
         }
-
-        await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
+        
         let uuid = await service.transmit(reader_util.CMD_READ_UUID);
-
         uuid = uuid.slice(0, -2);
         logger.log('Card UUID Read:', uuid);
 
-        return uuid
+        return uuid 
     },
 
     stopReadUUID: async function() {
@@ -260,7 +318,6 @@ const service = {
             throw new AppError('Card not present!', status='CARD_NOT_PRESENT')
         }
 
-        await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
 
         let response = Buffer.from(await service.transmit(reader_util.CMD_READ_BYTES(addr, num_bytes)));
 
@@ -292,7 +349,6 @@ const service = {
             throw new AppError('Cant authenticate as the card is not present', status='CARD_NOT_PRESENT');
         }
 
-        await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
         let pack = await service.transmit(reader_util.wrapCmd(0x1b, pwd));
 
         if(pack[2] === 0x00) {
@@ -312,7 +368,6 @@ const service = {
             throw new AppError('Cant authenticate as the card is not present', status='CARD_NOT_PRESENT');
         }
 
-        await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
 
         des.init(keys);
 
@@ -388,7 +443,6 @@ const service = {
     fastRead: async function(addr_start=0x04, addr_end=0x27) {
         logger.log('FastRead Requested from page: ' + addr_start + ' to page: ' + addr_end);
 
-        await service.connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
         let response = await service.transmit(reader_util.wrapCmd(0x3A, Buffer.from([addr_start, addr_end])));
 
         if(response[2] === 0x00) {
