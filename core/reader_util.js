@@ -53,12 +53,23 @@ const service = {
         return Buffer.concat([Buffer.from([0xFF, 0x00, 0x68, row_cmd]), len, txt]);
     },
 
-    performCardPresentCallbacks(waitingRequests) {
+    performCardPresentCallbacks: function(waitingRequests) {
         for (let key in waitingRequests) {
             const callBackObj = waitingRequests[key];
+            try {
+                const res = callBackObj.func(...callBackObj.params);
+                callBackObj.resolve(res);
+            }catch(err) {
+                callBackObj.reject(err)
+            }
+            delete waitingRequests[key];
+        }
+    },
 
-            const res = callBackObj.func(...callBackObj.params);
-            callBackObj.resolve(res);
+    rejectWaitingRequestsCallbacks: function(waitingRequests) {
+        for (let key in waitingRequests) {
+            const callBackObj = waitingRequests[key];
+            callBackObj.reject(new Error('Restarting PCSC'))
             delete waitingRequests[key];
         }
     },
