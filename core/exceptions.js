@@ -1,7 +1,6 @@
 
 module.exports = class AppError extends Error {
   constructor(message, status) {
-
     // Calling parent constructor of base Error class.
     super(message);
 
@@ -14,6 +13,5 @@ module.exports = class AppError extends Error {
     // You can use any additional properties you want.
     // `500` is the default value if not specified.
     this.status = status || 'READER_ERROR';
-
   }
 };
