@@ -1,5 +1,4 @@
 const ndef = require('ndef');
-
 const isWin = /^win/.test(process.platform);
 const isOsx = /^darwin/.test(process.platform);
 
@@ -64,6 +63,7 @@ const service = {
       delete waitingRequests[key];
     }
   },
+
 
   rejectWaitingRequestsCallbacks: function (waitingRequests) {
     for (let key in waitingRequests) {
