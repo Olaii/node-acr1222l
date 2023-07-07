@@ -10,30 +10,31 @@ const service = {
   reader: null,
   pcsc_instance: null,
   connectionProtocol: null,
-
+  commandInProgress: false,
   cardPresent: false,
   waitingRequests: {},
 
-  commandInProgress: false,
-
-
+  /**
+   * Initialise PCSC instance
+   * 
+   * @param {string} error_callback - callback fuction for pcsc instance errors
+   * @param {boolean} debug - display debug messages
+   * @return {promise}
+   */
   initialize: async function (error_callback, debug = false) {
     return new Promise(function (resolve, reject) {
-
       logger.debug = debug;
-
-      if (service.initialized) {
-        return resolve();
-      }
-
+      if (service.initialized) return resolve();
       service.initialized = true;
       service.pcsc_instance = pcsc();
 
+      // Watch for PCSC errors
       service.pcsc_instance.on('error', function (err) {
         logger.log('PCSC Error occured:', err);
         error_callback({ error: err, error_code: 'PCSC_ERROR' });
       });
 
+      // Watch for PCSC reader messages
       service.pcsc_instance.on('reader', function (reader) {
         if (reader_util.isValidReader(reader)) {
           logger.log('Reader found: ', reader.name);
@@ -85,30 +86,36 @@ const service = {
     }); // end Promise
   }, // end initialize function
 
-  hasReader() {
-    /*
-    * Is the NFC Reader present
-    */
+  /**
+  * Is the NFC Reader present
+  * @return {boolean}
+  */
+  hasReader: function () {
     return service.reader ? true : false;
   },
 
-  closePCSC() {
-    /*
-    * Stop the PCSC service, clear resources and set as unitilizalized.
-    */
+
+  /**
+  * Stop the PCSC service, clear resources and set as unitilizalized.
+  * @return {void}
+  */
+  closePCSC: function () {
     service.pcsc_instance.close();
     service.initialized = false;
-    service.reader = null,
-      service.pcsc_instance = null,
-      service.connectionProtocol = null,
-
-      service.cardPresent = false;
+    service.reader = null;
+    service.pcsc_instance = null;
+    service.connectionProtocol = null;
+    service.cardPresent = false;
     reader_util.rejectWaitingRequestsCallbacks(service.waitingRequests);
     service.waitingRequests = {};
-
     service.commandInProgress = false;
   },
 
+
+  /**
+  * Handle reader status change
+  * @return {void}
+  */
   handleStatusChange: async function (status) {
     const changes = service.reader.state ^ status.state;
 
@@ -128,6 +135,10 @@ const service = {
     }
   },
 
+
+  /**
+  * Connect to reader with share mode and protocol
+  */
   _connect: async function (share_mode, protocol) {
     logger.log('Connect requested with SHARE_MODE=' + share_mode + ' and PROTOCOL=' + protocol);
 
@@ -148,9 +159,12 @@ const service = {
         }
       });
     });
-
   },
 
+
+  /**
+  * Disconnect from reader
+  */
   _disconnect: async function () {
     if (service.reader.connected) {
 
@@ -172,6 +186,10 @@ const service = {
     return true;
   },
 
+
+  /**
+  * Transmit control command
+  */
   transmitControl: async function (cmd) {
     return new Promise(function (resolve, reject) {
       if (!service.reader) {
@@ -187,6 +205,10 @@ const service = {
     });
   },
 
+
+  /**
+  * Transmit command
+  */
   transmit: async function (cmd) {
     return new Promise(function (resolve, reject) {
       if (!service.reader) {
@@ -202,10 +224,12 @@ const service = {
     });
   },
 
+
+  /**
+  * Wrap commands with connection fallbacks
+  */
   _wrapCommands: async function (cmds) {
-    if (service.commandInProgress) {
-      return false;
-    }
+    if (service.commandInProgress) return false;
 
     service.commandInProgress = true;
     let needsDisconnect = false;
@@ -221,49 +245,83 @@ const service = {
     } catch (err) {
       logger.log("Error while transmitting command", err)
       service.commandInProgress = false;
-
       return false;
     }
 
-    if (needsDisconnect) {
-      await service._disconnect();
-    }
+    if (needsDisconnect) await service._disconnect();
     service.commandInProgress = false;
 
     return true;
   },
 
+
+  /**
+  * Turns on reader screen backlight
+  */
   turnOnBacklight: async function () {
+    logger.log('Turn on backlight');
     return await service._wrapCommands([reader_util.CMD_BACKLIGHT_ON]);
   },
 
+
+  /**
+  * Turns off reader screen backlight
+  */
   turnOffBacklight: async function () {
+    logger.log('Turn off backlight');
     return await service._wrapCommands([reader_util.CMD_BACKLIGHT_OFF]);
   },
 
+
+  /**
+  * Write to reader screen
+  * @param {string} row1 - Text for row 1
+  * @param {string} row2 - Text for row 2
+  */
   writeToLCD: async function (row1 = '', row2 = '') {
-    return await service._wrapCommands([reader_util.CMD_BACKLIGHT_ON,
-    reader_util.getLCDTextCmd(row1, 1),
-    reader_util.getLCDTextCmd(row2, 2)]);
+    logger.log('Write to LCD:', row1, row2);
+    return await service._wrapCommands([
+      reader_util.CMD_BACKLIGHT_ON,
+      reader_util.getLCDTextCmd(row1, 1),
+      reader_util.getLCDTextCmd(row2, 2)
+    ]);
   },
 
+
+  /**
+  * Clear reader screen
+  */
   clearLCD: async function () {
-    return await service._wrapCommands([reader_util.CMD_BACKLIGHT_OFF,
-    reader_util.getLCDTextCmd(' ', 1),
-    reader_util.getLCDTextCmd(' ', 2)]);
+    logger.log('Clear LCD');
+    return await service._wrapCommands([
+      reader_util.CMD_BACKLIGHT_OFF,
+      reader_util.getLCDTextCmd(' ', 1),
+      reader_util.getLCDTextCmd(' ', 2)
+    ]);
   },
 
+
+  /**
+  * Write buffer to address
+  * @param {Buffer} buffer - Buffer data to write on card
+  * @param {string} addr - Addres on card
+  */
   writeBuffer: async function (buffer, addr) {
     logger.log('Write Buffer requested. Buffer:', buffer);
 
     if (!service.cardPresent) {
       return new Promise(function (resolve, reject) {
         // Wait for the card to be attached
-        service.waitingRequests.writeBufferRequest = { resolve: resolve, reject: reject, func: service.writeBuffer, params: [buffer, addr] }
+        service.waitingRequests.writeBufferRequest = {
+          resolve,
+          reject,
+          func: service.writeBuffer,
+          params: [buffer, addr]
+        }
       });
     }
 
-    let response = await service.transmit(reader_util.CMD_WRITE(buffer, addr));
+    const response = await service.transmit(reader_util.CMD_WRITE(buffer, addr));
 
     if (response[0] === 0x90) {
       logger.log('Write successful');
@@ -272,19 +330,26 @@ const service = {
       throw new AppError('Write failed. Card is locked!', status = 'CARD_LOCKED');
     } else {
       logger.log('Write failed with error code:', response[0]);
-      throw new AppError('Write failed with Error code: ' + response[0], 'WRITE_FAILED')
+      throw new AppError('Write failed with Error code: ' + response[0], 'WRITE_FAILED');
     }
-
-    return true
-  },
-
-  stopWriteBuffer: async function () {
-    logger.log('Stop Write Buffer');
-    delete service.waitingRequests.writeBufferRequest;
 
     return true;
   },
 
+
+  /**
+  * Stop write buffer
+  */
+  stopWriteBuffer: async function () {
+    logger.log('Stop write buffer');
+    delete service.waitingRequests.writeBufferRequest;
+    return true;
+  },
+
+
+  /**
+  * Read UUID on card
+  */
   readUUID: async function () {
     logger.log('Read UUID requested.');
 
@@ -297,18 +362,28 @@ const service = {
 
     let uuid = await service.transmit(reader_util.CMD_READ_UUID);
     uuid = uuid.slice(0, -2);
-    logger.log('Card UUID Read:', uuid);
+    logger.log('Card UUID read:', uuid);
 
-    return uuid
+    return uuid;
   },
 
-  stopReadUUID: async function () {
-    logger.log('Stop UUID Read');
-    delete service.waitingRequests.readUUIDRequest;
 
+  /**
+  * Stop read UUID
+  */
+  stopReadUUID: async function () {
+    logger.log('Stop UUID read');
+    delete service.waitingRequests.readUUIDRequest;
     return true;
   },
 
+
+  /**
+  * Read bytes on address
+  * @param {string} addr - Addres on card
+  * @param {number} num_bytes - Number of bytes to read
+  * @param {boolean} wait_for_card - Wait for card and then read
+  */
   readBytes: async function (addr, num_bytes = 4, wait_for_card = false) {
     logger.log('Read ' + num_bytes + ' on addr:', addr);
 
@@ -318,64 +393,78 @@ const service = {
         service.waitingRequests.readBytesRequest = { resolve: resolve, reject: reject, func: service.readBytes, params: [addr, num_bytes] }
       });
     } else if (!service.cardPresent && wait_for_card === false) {
-      throw new AppError('Card not present!', status = 'CARD_NOT_PRESENT')
+      throw new AppError('Card not present!', 'CARD_NOT_PRESENT')
     }
 
-
-    let response = Buffer.from(await service.transmit(reader_util.CMD_READ_BYTES(addr, num_bytes)));
-
+    const response = Buffer.from(await service.transmit(reader_util.CMD_READ_BYTES(addr, num_bytes)));
 
     if (response.slice(-2, -1)[0] === 0x90) {
       logger.log('Read bytes successful');
     } else {
-      throw new AppError('Read bytes failed!', status = 'READ_FAILED')
+      throw new AppError('Read bytes failed!', 'READ_FAILED')
     }
 
     return response.slice(0, -2);
   },
 
-  stopReadBytes: function () {
-    logger.log('Stop Read Bytes Read');
-    delete service.waitingRequests.readBytesRequest;
 
+  /**
+  * Stop reading bytes
+  */
+  stopReadBytes: function () {
+    logger.log('Stop read bytes');
+    delete service.waitingRequests.readBytesRequest;
     return true;
   },
 
+
+  /**
+  * Authenticate with password
+  * @param {string} pwd - Password
+  */
   authenticate: async function (pwd) {
     return await authenticateNTAG(pwd);
   },
 
+
+  /**
+  * Authenticate NTAG with password
+  * @param {string} pwd - Password
+  */
   authenticateNTAG: async function (pwd) {
-    logger.log('Authenticated called');
+    logger.log('Authenticated NTAG called');
 
     if (!service.cardPresent) {
-      throw new AppError('Cant authenticate as the card is not present', status = 'CARD_NOT_PRESENT');
+      throw new AppError('Cant authenticate as the card is not present', 'CARD_NOT_PRESENT');
     }
 
-    let pack = await service.transmit(reader_util.wrapCmd(0x1b, pwd));
+    const pack = await service.transmit(reader_util.wrapCmd(0x1b, pwd));
 
     if (pack[2] === 0x00) {
       logger.log('Authentication successful. PACK:', pack.slice(3, 5));
     } else {
       logger.log('Wrong PWD. Authentication failed!');
-      throw new AppError('Wrong password. Authentication failed!', status = 'WRONG_PASSWORD');
+      throw new AppError('Wrong password. Authentication failed!', 'WRONG_PASSWORD');
     }
 
     return pack.slice(3, 5);
   },
 
+
+  /**
+  * Authenticate UltralightC with keys
+  */
   authenticateUltralightC: async function (keys) {
-    logger.log('Authenticated called');
+    logger.log('Authenticated UltralightC called');
 
     if (!service.cardPresent) {
       throw new AppError('Cant authenticate as the card is not present', status = 'CARD_NOT_PRESENT');
     }
 
-
     des.init(keys);
 
     let rndA = Buffer.alloc(8);
-    for (var i = 0; i < rndA.length; i++) {
+    for (let i = 0; i < rndA.length; i++) {
       rndA[i] = Math.floor(Math.random() * 256);
     }
 
@@ -398,6 +487,10 @@ const service = {
     return;
   },
 
+
+  /**
+  * Read NDEF data
+  */
   readNDEF: async function (addr_start = 0x04, addr_end = 0x27) {
     if (!service.cardPresent) {
       return new Promise(function (resolve, reject) {
@@ -411,7 +504,7 @@ const service = {
       try {
         data = await service.fastRead(addr_start, addr_end);
       } catch (err) {
-        logger.log('FAST_READ command failed. Retrying with READ command');
+        logger.log('Fast read command failed. Retrying with READ command');
         await service.transmit(Buffer.from([0xD4, 0x54, 0x01])); // WUPA
 
         data = Buffer.alloc(0);
@@ -426,7 +519,7 @@ const service = {
       response.uuid_bytes = await service.readUUID();
       response.uuid = response.uuid_bytes.toString('hex').toUpperCase();
 
-      return response
+      return response;
     } catch (err) {
       logger.log('Error during read NDEF. Please present the card to the reader');
       return new Promise(function (resolve, reject) {
@@ -436,59 +529,74 @@ const service = {
     }
   },
 
-  stopNDEFRead: function () {
-    logger.log('Stop NDEF Read');
-    delete service.waitingRequests.readNDEFRequest;
 
+  /**
+  * Stop NDEF read
+  */
+  stopNDEFRead: function () {
+    logger.log('Stop NDEF read');
+    delete service.waitingRequests.readNDEFRequest;
     return true;
   },
 
-  fastRead: async function (addr_start = 0x04, addr_end = 0x27) {
-    logger.log('FastRead Requested from page: ' + addr_start + ' to page: ' + addr_end);
 
-    let response = await service.transmit(reader_util.wrapCmd(0x3A, Buffer.from([addr_start, addr_end])));
+  /**
+  * Fast read
+  */
+  fastRead: async function (addr_start = 0x04, addr_end = 0x27) {
+    logger.log('Fast read requested from page: ' + addr_start + ' to page: ' + addr_end);
+
+    const response = await service.transmit(reader_util.wrapCmd(0x3A, Buffer.from([addr_start, addr_end])));
 
     if (response[2] === 0x00) {
       response = response.slice(3, -2);
     } else {
-      throw new AppError('FAST_READ command failed.', status = 'FAST_READ_FAILED')
+      throw new AppError('Fast read command failed.', 'FAST_READ_FAILED')
     }
 
-    return response
+    return response;
   },
 
+
+  /**
+  * Get version
+  */
   getVersion: async function () {
-    logger.log('GET_VERSION Requested!');
+    logger.log('Get version requested');
 
     let response = await service.transmit(reader_util.wrapCmd(0x60, Buffer.alloc(0)));
 
     if (response[2] === 0x00) {
       response = response.slice(3, -2);
     } else {
-      throw new AppError('GET_VERSION command failed.', status = 'GET_VERSION_FAILED')
+      throw new AppError('Get version command failed.', 'GET_VERSION_FAILED')
     }
 
-    return response
+    return response;
   },
 
+
+  /**
+  *  Rotate array left
+  */
   _rotateLeft: function (array) {
     let ret = Buffer.from(array);
-
-    for (var i = 1; i < array.length; i++) {
+    for (let i = 1; i < array.length; i++) {
       ret[i - 1] = ret[i];
     }
-
     ret[ret.length - 1] = array[0];
     return ret;
   },
 
+
+  /**
+  *  Rotate array right
+  */
   _rotateRight: function (array) {
     let ret = Buffer.from(array);
-
-    for (var i = array.length - 2; i >= 0; i--) {
+    for (let i = array.length - 2; i >= 0; i--) {
       ret[i + 1] = ret[i];
     }
-
     ret[0] = array[ret.length - 1];
     return ret;
   },
