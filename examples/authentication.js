@@ -8,7 +8,6 @@
 
 const reader = require('../acr1222l');
 
-
 function error_cb(err) {
   console.log('Something went wrong:', err);
 }

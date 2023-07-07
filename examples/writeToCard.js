@@ -1,13 +1,10 @@
 /**
  This example will show you how to write binary data to the card.
-
  You should be familiar with the card you are using - where is the user space etc.
-
  In this example we will be using NTAG213: https://www.nxp.com/docs/en/data-sheet/NTAG213_215_216.pdf
  **/
 
 const reader = require('../acr1222l');
-
 
 function error_cb(err) {
   console.log('Something went wrong:', err);
@@ -32,7 +29,6 @@ async function main() {
   // And now final check if the data really updated?
   const data2 = await reader.readBytes(0x04, 4);
   await reader.writeToLCD('Page 0x04 Write:', data2.toString('hex'));
-
 
   // Should we want to stop reading, writing etc. one should call the following functions
   reader.stopReadBytes();

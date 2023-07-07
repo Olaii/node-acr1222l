@@ -1,11 +1,9 @@
 /**
  This example will show you how to read the NDEF message on the card.
-
  It will output the NDEF to the screen of the device.
  **/
 
 const reader = require('../acr1222l');
-
 
 function error_cb(err) {
   console.log('Something went wrong:', err);
@@ -14,7 +12,6 @@ function error_cb(err) {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-
 
 async function main() {
   // First let's initialize the reader. We will use the debug mode, so we can see the log output in console
@@ -33,6 +30,5 @@ async function main() {
 
   main();
 }
-
 
 main();
