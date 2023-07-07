@@ -40,7 +40,6 @@ To use this module read OS specific notes, then install with:
         sudo service pcscd status
         sudo service pcscd start # if not yet running
 
-
 ## Use in nw.js
 
 To use the library inside nw.js project you will have to rebuild the package with `nw-gyp`.
@@ -58,7 +57,7 @@ Manually rebuild the `pcsc` library.
 
 ## Usage of the library
 
-Examples of the library usage are also available under the *examples* folder.
+Examples of the library usage are also available under the _examples_ folder.
 
 ### Debugging
 
@@ -73,14 +72,14 @@ For debug purposes you can turn on verbose mode with the following code:
 When initializing you have to pass in the **error_callback** function. It will be called in case of an error. Possible
 error codes are:
 
- - READER_REMOVED
- - READER_ERROR
- - PCSC_ERROR
+- READER_REMOVED
+- READER_ERROR
+- PCSC_ERROR
 
 Other init parameters during are:
-  - **error_callback** - *function* to be called upon errors
-  - **debug** - *boolean* should the library output logs to console
 
+- **error_callback** - _function_ to be called upon errors
+- **debug** - _boolean_ should the library output logs to console
 
 Init method returns a **Promise**. Continue working with the reader only after the init has completed the initialization.
 
@@ -106,8 +105,8 @@ Sample code:
 
         reader.writeToLCD('First line text', 'Second line text');
 
-
 ### Clear LCD screen
+
 Will clear LCD text and turn off the backlight.
 
 Clear call returns a **Promise**.
@@ -115,7 +114,6 @@ Clear call returns a **Promise**.
 Sample code:
 
         reader.clearLCD();
-
 
 ### Read NDEF data
 
@@ -125,11 +123,10 @@ containing raw byte data, uuid and NDEF message.
 This method returns a **Promise**. It will resolve once a valid card is presented. In case the card read fails, it will continue
 reading until a successful read is completed and NDEF returned.
 
-
 Call parameters:
-  - **addr_start** - *hex* - Start address on the card. Defaults to 0x04
-  - **addr_end** - *hex* - End address on the card. Defaults to 0x27
 
+- **addr_start** - _hex_ - Start address on the card. Defaults to 0x04
+- **addr_end** - _hex_ - End address on the card. Defaults to 0x27
 
 Return object:
 
@@ -163,7 +160,7 @@ To stop the read process. Returns a **Promise**.
 ### Read UUID
 
 Read card UUID.
-Returns a **Promise** of a <Buffer>.
+Returns a **Promise** of a `Buffer`.
 
         reader.readUUID();
 
@@ -181,30 +178,28 @@ Returns a **Promise**.
 
         reader.turnOffBacklight();
 
-
 ### Authenticate
 
 Will issue an authenticate call to the card (0x1b). Upon successful authentication the function call will return
 a 2 byte PACK. If the authentication has failed error will be thrown.
 
 Call parameters:
-  - **pwd** - *Buffer* - card password
 
-        await reader.authenticate(Buffer([0xFF, 0xFF, 0xFF, 0xFE]));
+- **pwd** - _Buffer_ - card password
 
+      await reader.authenticate(Buffer([0xFF, 0xFF, 0xFF, 0xFE]));
 
 ### Read Bytes
 
 Should you need to read bytes directly from the card.
 
 Call parameters:
-  - **addr** - *hex* - start address
-  - **num_bytes** - *int* - number of bytes to read. Usually set to 16 for a single read.
 
+- **addr** - _hex_ - start address
+- **num_bytes** - _int_ - number of bytes to read. Usually set to 16 for a single read.
 
-        // Read 16 bytes
-        const data = await reader.readBytes(addr=0x04, num_bytes=16)
-
+      // Read 16 bytes
+      const data = await reader.readBytes(addr=0x04, num_bytes=16)
 
 ### Stop Read Bytes
 
@@ -212,27 +207,27 @@ Read bytes will wait until there is a card present. To stop reading call this fu
 
         await reader.stopReadBytes()
 
-
 ### Fast Read
 
 Read all bytes between two addresses.
 
 Call parameters:
-  - **addr_start** - *hex* - start addr
-  - **addr_end** - *hex* - end addr
 
-        const data = await reader.fastRead(addr_start=0x04, addr_end=0x27)
+- **addr_start** - _hex_ - start addr
+- **addr_end** - _hex_ - end addr
+
+      const data = await reader.fastRead(addr_start=0x04, addr_end=0x27)
 
 ### Write Buffer
 
 Write bytes to the card.
 
 Call parameters:
-  - **buffer** - *hex* - bytes to write - usually 8
-  - **addr** - *hex* - start address where to write
 
-        await reader.writeBuffer(buff, addr)
+- **buffer** - _hex_ - bytes to write - usually 8
+- **addr** - _hex_ - start address where to write
 
+      await reader.writeBuffer(buff, addr)
 
 ### Stop Write Buffer
 
