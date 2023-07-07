@@ -36,55 +36,53 @@ const service = {
 
       // Watch for PCSC reader messages
       service.pcsc_instance.on('reader', function (reader) {
-        if (reader_util.isValidReader(reader)) {
-          logger.log('Reader found: ', reader.name);
-
-          // Status handler
-          reader.on('status', function (status) {
-            service.handleStatusChange(status);
-          });
-
-
-          // Reader removed handler
-          reader.on('end', async function () {
-            logger.log('Reader removed - reader end');
-
-            service.reader = null;
-            service.cardPresent = false;
-            service.commandInProgress = false;
-            reader.close();
-
-            error_callback({ error: new Error('Reader removed'), error_code: 'READER_REMOVED' })
-            service.closePCSC();
-            await service.initialize(error_callback, debug);
-
-          });
-
-          // Reader error handler
-          reader.on('error', function (err) {
-            logger.log('Reader error occured:', err);
-
-            //service.reader = null;
-            service.cardPresent = false;
-            service.commandInProgress = false;
-            //reader.close();
-
-            error_callback({ error: err, error_code: 'READER_ERROR' });
-          });
-
-          // Resolve init at this point
-          logger.log('Init completed');
-          service.reader = reader;
-
-          return resolve();
-        } // end if validReader
-        else {
-          // close all other invalid readers
+        if (!reader_util.isValidReader(reader)) {
+          // Close all other invalid readers
           reader.close();
         }
-      }); // end pcsc.on('reader')
-    }); // end Promise
-  }, // end initialize function
+
+        logger.log('Reader found:', reader.name);
+
+        // Status handler
+        reader.on('status', function (status) {
+          service.handleStatusChange(status);
+        });
+
+        // Reader removed handler
+        reader.on('end', async function () {
+          logger.log('Reader removed - reader end');
+
+          service.reader = null;
+          service.cardPresent = false;
+          service.commandInProgress = false;
+          reader.close();
+
+          error_callback({ error: new Error('Reader removed'), error_code: 'READER_REMOVED' })
+          service.closePCSC();
+          await service.initialize(error_callback, debug);
+        });
+
+        // Reader error handler
+        reader.on('error', function (err) {
+          logger.log('Reader error occured:', err);
+
+          // service.reader = null;
+          service.cardPresent = false;
+          service.commandInProgress = false;
+          // reader.close();
+
+          error_callback({ error: err, error_code: 'READER_ERROR' });
+        });
+
+        // Resolve init at this point
+        logger.log('Init completed');
+        service.reader = reader;
+
+        return resolve();
+      });
+    });
+  },
+
 
   /**
   * Is the NFC Reader present
@@ -141,22 +139,17 @@ const service = {
   */
   _connect: async function (share_mode, protocol) {
     logger.log('Connect requested with SHARE_MODE=' + share_mode + ' and PROTOCOL=' + protocol);
-
-    if (service.reader.connected) {
-      return service.connectionProtocol
-    }
+    if (service.reader.connected) return service.connectionProtocol;
 
     return new Promise(function (resolve, reject) {
       service.reader.connect({ share_mode: share_mode, protocol: protocol }, function (err, protocol) {
         if (err) {
           logger.log('Error connecting with reader:', err);
-          reject(err)
-        } else {
-          logger.log('Connected with protocol:', protocol);
-          service.connectionProtocol = protocol;
-
-          resolve(protocol);
+          return reject(err);
         }
+        logger.log('Connected with protocol:', protocol);
+        service.connectionProtocol = protocol;
+        resolve(protocol);
       });
     });
   },
@@ -166,24 +159,23 @@ const service = {
   * Disconnect from reader
   */
   _disconnect: async function () {
-    if (service.reader.connected) {
-
-      return new Promise(function (resolve, reject) {
-        service.reader.disconnect(service.reader.SCARD_LEAVE_CARD, function (err) {
-          if (err) {
-            logger.log('Error disconnecting:', err.message);
-            reject(err);
-          } else {
-            logger.log('Disconnected');
-            // Clean variables
-            service.connectionProtocol = null;
-            resolve(true);
-          }
-        });
-      });
+    if (!service.reader.connected) {
+      logger.log('Reader was not connected');
+      return true;
     }
-    logger.log('Reader was not connected');
-    return true;
+
+    return new Promise(function (resolve, reject) {
+      service.reader.disconnect(service.reader.SCARD_LEAVE_CARD, function (err) {
+        if (err) {
+          logger.log('Error disconnecting:', err.message);
+          return reject(err);
+        }
+        logger.log('Disconnected');
+        // Clean variables
+        service.connectionProtocol = null;
+        resolve(true);
+      });
+    });
   },
 
 
@@ -192,15 +184,10 @@ const service = {
   */
   transmitControl: async function (cmd) {
     return new Promise(function (resolve, reject) {
-      if (!service.reader) {
-        reject(new Error("Reader not connected"))
-      }
+      if (!service.reader) return reject(new Error("Reader not connected"));
       service.reader.control(cmd, service.reader.SCARD_CTL_CODE(3500), 40, function (err, data) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(data);
-        }
+        if (err) return reject(err);
+        resolve(data);
       });
     });
   },
@@ -211,15 +198,10 @@ const service = {
   */
   transmit: async function (cmd) {
     return new Promise(function (resolve, reject) {
-      if (!service.reader) {
-        reject(new Error("Reader not connected"))
-      }
+      if (!service.reader) return reject(new Error("Reader not connected"));
       service.reader.transmit(cmd, 1024, service.connectionProtocol, function (err, data) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(data);
-        }
+        if (err) return reject(err);
+        resolve(data);
       });
     });
   },
