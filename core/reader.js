@@ -39,7 +39,7 @@ const service = {
       service.pcsc_instance.on('reader', function (reader) {
         if (!reader_util.isValidReader(reader)) {
           // Close all other invalid readers
-          reader.close();
+          return reader.close();
         }
 
         // Status handler
