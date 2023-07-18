@@ -13,6 +13,7 @@ const service = {
   commandInProgress: false,
   cardPresent: false,
   waitingRequests: {},
+  callback: function() {},
 
   /**
    * Initialise PCSC instance
@@ -41,8 +42,6 @@ const service = {
           reader.close();
         }
 
-        logger.log('Reader found:', reader.name);
-
         // Status handler
         reader.on('status', function (status) {
           service.handleStatusChange(status);
@@ -51,6 +50,7 @@ const service = {
         // Reader removed handler
         reader.on('end', async function () {
           logger.log('Reader removed - reader end');
+          service.callback({ id: "READER_END", name: "Reader was disconnected" });
 
           service.reader = null;
           service.cardPresent = false;
@@ -74,12 +74,14 @@ const service = {
           error_callback({ error: err, error_code: 'READER_ERROR' });
         });
 
-        // Resolve init at this point
-        logger.log('Init completed');
+        logger.log('Reader found:', reader.name);
+        service.callback({ id: "READER_FOUND", name: "Reader was connected", data: reader });
         service.reader = reader;
-
-        return resolve();
       });
+      
+      // Resolve init at this point
+      logger.log('Init completed');
+      return resolve();
     });
   },
 
@@ -227,7 +229,7 @@ const service = {
     } catch (err) {
       logger.log("Error while transmitting command", err)
       service.commandInProgress = false;
-      return false;
+      throw err;
     }
 
     if (needsDisconnect) await service._disconnect();
