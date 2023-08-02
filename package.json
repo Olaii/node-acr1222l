@@ -1,6 +1,6 @@
 {
   "name": "acr1222l",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "ACR1222L NFC reader node library",
   "main": "acr1222l.js",
   "scripts": {
