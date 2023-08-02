@@ -127,8 +127,12 @@ const service = {
       logger.log('Card present');
       service.cardPresent = true;
       try {
-        await service._connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
-        reader_util.performCardPresentCallbacks(service.waitingRequests);
+        if(!service.commandInProgress) {
+          await service._connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
+          reader_util.performCardPresentCallbacks(service.waitingRequests);
+        }else {
+          logger.log("There is already LCD command in progress. Cannot connect to card.")
+        }
       } catch (err) {
         logger.log("Card present ERROR CONNECTING", err)
       }
@@ -213,7 +217,10 @@ const service = {
   * Wrap commands with connection fallbacks
   */
   _wrapCommands: async function (cmds) {
-    if (service.commandInProgress) return false;
+    if (service.commandInProgress) {
+      logger.log("Command in progress. Ignoring")
+      return false;
+    }
 
     service.commandInProgress = true;
     let needsDisconnect = false;
@@ -232,7 +239,12 @@ const service = {
       throw err;
     }
 
-    if (needsDisconnect) await service._disconnect();
+    try {
+      if (needsDisconnect) await service._disconnect();
+    } catch (err) {
+      logger.log("Error disconnecting from reader - _wrapCommands", err);
+    }
+
     service.commandInProgress = false;
 
     return true;
