@@ -81,7 +81,7 @@ const service = {
       0x00, // INS
       0x00, // P1
       0x00, // P2
-      0x07, // LC // - total lenght with D4h and 42h
+      0x07, // LC // - total length with D4h and 42h
       0xD4, 0x42, // InCommunicateThru
       0x1B, // PWD_AUTH (See data sheet) - CMD here
       Password, // payload - instruction data

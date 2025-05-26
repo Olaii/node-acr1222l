@@ -16,9 +16,9 @@ const service = {
   callback: function() {},
 
   /**
-   * Initialise PCSC instance
+   * Initialize PCSC instance
    * 
-   * @param {string} error_callback - callback fuction for pcsc instance errors
+   * @param {string} error_callback - callback function for pcsc instance errors
    * @param {boolean} debug - display debug messages
    * @return {promise}
    */
@@ -31,7 +31,7 @@ const service = {
 
       // Watch for PCSC errors
       service.pcsc_instance.on('error', function (err) {
-        logger.log('PCSC Error occured:', err);
+        logger.log('PCSC Error occurred:', err);
         error_callback({ error: err, error_code: 'PCSC_ERROR' });
       });
 
@@ -64,7 +64,7 @@ const service = {
 
         // Reader error handler
         reader.on('error', function (err) {
-          logger.log('Reader error occured:', err);
+          logger.log('Reader error occurred:', err);
 
           // service.reader = null;
           service.cardPresent = false;
@@ -96,7 +96,7 @@ const service = {
 
 
   /**
-  * Stop the PCSC service, clear resources and set as unitilizalized.
+  * Stop the PCSC service, clear resources and set as uninitialized.
   * @return {void}
   */
   closePCSC: function () {
@@ -307,7 +307,7 @@ const service = {
   /**
   * Write buffer to address
   * @param {Buffer} buffer - Buffer data to write on card
-  * @param {string} addr - Addres on card
+  * @param {string} addr - Address on card
   */
   writeBuffer: async function (buffer, addr) {
     logger.log('Write Buffer requested. Buffer:', buffer);
@@ -383,7 +383,7 @@ const service = {
 
   /**
   * Read bytes on address
-  * @param {string} addr - Addres on card
+  * @param {string} addr - Address on card
   * @param {number} num_bytes - Number of bytes to read
   * @param {boolean} wait_for_card - Wait for card and then read
   */
