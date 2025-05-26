@@ -224,9 +224,16 @@ const service = {
 
     service.commandInProgress = true;
     let needsDisconnect = false;
-    if (service.reader && !service.reader.connected) {
-      await service._connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
-      needsDisconnect = true;
+
+    // wrapped in try catch to prevent reader in stuck state
+    try {
+      if (service.reader && !service.reader.connected) {
+        await service._connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
+        needsDisconnect = true;
+      }
+    }catch (err) {
+      service.commandInProgress = false
+      throw err
     }
 
     try {
