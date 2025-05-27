@@ -1,5 +1,10 @@
 # Changelog
 
+## **v0.6.3** - 27.5.2025
+
+- added call disconnect on reader end event,
+- added try catch around _disconnect functions
+
 ## **v0.6.2** - 27.5.2025
 
 - fix reader stuck in frozen state due to CTRL_PROTOCOL connection error
