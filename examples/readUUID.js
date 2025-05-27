@@ -32,7 +32,7 @@ async function main() {
       await sleep(2000);
       await reader.clearLCD();
     } catch (err) {
-      console.log("ERRRRRRRRRRRRRRRRRRRRRRRRRR")
+      console.log("Error", err);
     }
   }
 }

@@ -13,7 +13,7 @@ const service = {
   commandInProgress: false,
   cardPresent: false,
   waitingRequests: {},
-  callback: function() {},
+  callback: function () { },
 
   /**
    * Initialize PCSC instance
@@ -78,7 +78,7 @@ const service = {
         service.callback({ id: "READER_FOUND", name: "Reader was connected", data: reader });
         service.reader = reader;
       });
-      
+
       // Resolve init at this point
       logger.log('Init completed');
       return resolve();
@@ -127,10 +127,10 @@ const service = {
       logger.log('Card present');
       service.cardPresent = true;
       try {
-        if(!service.commandInProgress) {
+        if (!service.commandInProgress) {
           await service._connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
           reader_util.performCardPresentCallbacks(service.waitingRequests);
-        }else {
+        } else {
           logger.log("There is already LCD command in progress. Cannot connect to card.")
         }
       } catch (err) {
