@@ -1,16 +1,16 @@
 # Changelog
 
-## **v0.6.2* - 27.5.2025
+## **v0.6.2** - 27.5.2025
 
 - fix reader stuck in frozen state due to CTRL_PROTOCOL connection error
 - small code fix
 - fixed typos
 
-## **v0.6.1* - 2.8.2023
+## **v0.6.1** - 2.8.2023
 
 - command in progress fixes
 
-## **v0.6.0* - 18.7.2023
+## **v0.6.0** - 18.7.2023
 
 - fixed multiple end events when invalid readers are found
 - fixed _wrapCommands to throw errors,
@@ -38,4 +38,4 @@
 - made performCardPresentCallbacks a function
 - wrap LCD commands to prevent double calls which lead to invalidHandle error
 
-## **Init* - 6.3.2017
+## **Init** - 6.3.2017

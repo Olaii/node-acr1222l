@@ -1,6 +1,6 @@
-# Node.js wrapper for ACR1222L NFC reader
+# ACR1222L v0.6.2
 
-Library for easier connecting and management of ACR1222L NFC reader. This library is tested on Windows and Linux.
+Node.js wrapper for ACR1222L NFC reader. Library for easier connecting and management of ACR1222L NFC reader. This library is tested on Windows and Linux.
 
 To use this module read OS specific notes, then install with:
 
@@ -33,7 +33,7 @@ To use this module read OS specific notes, then install with:
 
 2. Install drivers:
 
-        https://www.acs.com.hk/download-driver-unified/10312/ACS-Unified-PKG-Lnx-116-P.zip
+    https://www.acs.com.hk/download-driver-unified/10312/ACS-Unified-PKG-Lnx-116-P.zip
 
 3. Then check that pcscd is running:
 
@@ -46,14 +46,18 @@ To use the library inside nw.js project you will have to rebuild the package wit
 
 First you need to install the `nw-gyp`. On Windows you have to run this with administrator rights.
 
-        npm install -g nw-gyp
+```bash
+npm install -g nw-gyp
+```
 
 Manually rebuild the `pcsc` library.
 
-        cd node_modules/@pokusew/pcsclite
+```bash
+cd node_modules/@pokusew/pcsclite
 
-        nw-gyp configure --target=0.20.3   // use the appropriate Nw.js version
-        nw-gyp rebuild --target=0.20.3
+nw-gyp configure --target=0.20.3 // Use the appropriate NWJS version
+nw-gyp rebuild --target=0.20.3
+```
 
 ## Usage of the library
 
@@ -63,9 +67,10 @@ Examples of the library usage are also available under the _examples_ folder.
 
 For debug purposes you can turn on verbose mode with the following code:
 
-        var reader = require('acr1222l');
-
-        await reader.initialize(error_cb, debug=true);
+```js
+const reader = require('acr1222l');
+await reader.initialize(error_cb, debug=true);
+```
 
 ### Initialization
 
@@ -85,14 +90,16 @@ Init method returns a **Promise**. Continue working with the reader only after t
 
 Sample code:
 
-        var reader = require('acr1222l');
+```js
+const reader = require('acr1222l');
 
-        reader.init(nfc_error_callback); //initialize
+reader.init(nfc_error_callback); // Initialize
 
-        function nfc_error_callback(err) {
-            console.log('NFC ERROR CODE:', err.error_code);
-            console.log('NFC ERROR MESSAGE:', err.error);
-        }
+function nfc_error_callback(err) {
+  console.log('NFC ERROR CODE:', err.error_code);
+  console.log('NFC ERROR MESSAGE:', err.error);
+}
+```
 
 ### Write to LCD screen
 
@@ -103,7 +110,9 @@ Write call returns a **Promise**.
 
 Sample code:
 
-        reader.writeToLCD('First line text', 'Second line text');
+```js
+reader.writeToLCD('First line text', 'Second line text');
+```
 
 ### Clear LCD screen
 
@@ -113,7 +122,9 @@ Clear call returns a **Promise**.
 
 Sample code:
 
-        reader.clearLCD();
+```js
+reader.clearLCD();
+```
 
 ### Read NDEF data
 
@@ -130,53 +141,65 @@ Call parameters:
 
 Return object:
 
-        {
-           original_bytes: <Buffer>,
-           uuid_bytes: <Buffer>,
-           ndef: <string>,
-           uuid: <string>
-        }
+```js
+{
+  original_bytes: <Buffer>,
+  uuid_bytes: <Buffer>,
+  ndef: <string>,
+  uuid: <string>
+}
+```
 
 Sample code:
 
-        reader.readNDEF(addr_start=0x04, addr_end=0x27).then(function(data) {
-            console.log('NDEF', data.ndef);
-            console.log('UUID', data.uuid);
-        });
+```js
+reader.readNDEF(addr_start=0x04, addr_end=0x27).then(function(data) {
+  console.log('NDEF', data.ndef);
+  console.log('UUID', data.uuid);
+});
+```
 
 or with async/await
 
-        const data = reader.readNDEF(addr_start=0x04, addr_end=0x27)
-
-        console.log('NDEF', data.ndef);
-        console.log('UUID', data.uuid);
+```js
+const data = reader.readNDEF(addr_start=0x04, addr_end=0x27)
+console.log('NDEF', data.ndef);
+console.log('UUID', data.uuid);
+```
 
 ### Stop NDEF read
 
 To stop the read process. Returns a **Promise**.
 
-        reader.stopNDEFRead()
+```js
+reader.stopNDEFRead()
+```
 
 ### Read UUID
 
 Read card UUID.
 Returns a **Promise** of a `Buffer`.
 
-        reader.readUUID();
+```js
+reader.readUUID();
+```
 
 ### Stop UUID read
 
 To stop the read process. Returns a **Promise**.
 
-        reader.stopUUIDRead()
+```js
+reader.stopUUIDRead()
+```
 
 ### Turn on/off the backlight
 
 Returns a **Promise**.
 
-        reader.turnOnBacklight();
-
-        reader.turnOffBacklight();
+```js
+reader.turnOnBacklight();
+reader.turnOffBacklight();
+```
 
 ### Authenticate
 
@@ -187,7 +210,9 @@ Call parameters:
 
 - **pwd** - _Buffer_ - card password
 
-      await reader.authenticate(Buffer([0xFF, 0xFF, 0xFF, 0xFE]));
+```js
+await reader.authenticate(Buffer([0xFF, 0xFF, 0xFF, 0xFE]));
+```
 
 ### Read Bytes
 
@@ -198,14 +223,18 @@ Call parameters:
 - **addr** - _hex_ - start address
 - **num_bytes** - _int_ - number of bytes to read. Usually set to 16 for a single read.
 
-      // Read 16 bytes
-      const data = await reader.readBytes(addr=0x04, num_bytes=16)
+```js
+// Read 16 bytes
+const data = await reader.readBytes(addr=0x04, num_bytes=16)
+```
 
 ### Stop Read Bytes
 
 Read bytes will wait until there is a card present. To stop reading call this function.
 
-        await reader.stopReadBytes()
+```js
+await reader.stopReadBytes()
+```
 
 ### Fast Read
 
@@ -216,7 +245,9 @@ Call parameters:
 - **addr_start** - _hex_ - start addr
 - **addr_end** - _hex_ - end addr
 
-      const data = await reader.fastRead(addr_start=0x04, addr_end=0x27)
+```js
+const data = await reader.fastRead(addr_start=0x04, addr_end=0x27)
+```
 
 ### Write Buffer
 
@@ -227,10 +258,16 @@ Call parameters:
 - **buffer** - _hex_ - bytes to write - usually 8
 - **addr** - _hex_ - start address where to write
 
-      await reader.writeBuffer(buff, addr)
+```js
+await reader.writeBuffer(buff, addr)
+```
 
 ### Stop Write Buffer
 
 Write will wait for the card to be present. To stop call this function
 
-        await reader.stopWriteBuffer()
+```js
+await reader.stopWriteBuffer()
+```
+
+## [Changelog](CHANGELOG.md)
