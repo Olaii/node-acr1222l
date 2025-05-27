@@ -52,6 +52,11 @@ const service = {
           logger.log('Reader removed - reader end');
           service.callback({ id: "READER_END", name: "Reader was disconnected" });
 
+          try {
+            await service._disconnect();
+          } catch (err) {
+            logger.log("Reader end disconnect error:", err);
+          }
           service.reader = null;
           service.cardPresent = false;
           service.commandInProgress = false;
@@ -122,7 +127,12 @@ const service = {
     if (service.reader.state && (changes & service.reader.SCARD_STATE_EMPTY) && (status.state & service.reader.SCARD_STATE_EMPTY)) {
       logger.log('Card removed');
       service.cardPresent = false;
-      await service._disconnect();
+
+      try {
+        await service._disconnect();
+      } catch (err) {
+        logger.log("Handle status change disconnect error:", err);
+      }
     } else if ((changes & service.reader.SCARD_STATE_PRESENT) && (status.state & service.reader.SCARD_STATE_PRESENT)) {
       logger.log('Card present');
       service.cardPresent = true;
@@ -165,8 +175,8 @@ const service = {
   * Disconnect from reader
   */
   _disconnect: async function () {
-    if (!service.reader.connected) {
-      logger.log('Reader was not connected');
+    if (!service.reader) {
+      logger.log('No reader to disconnect from');
       return true;
     }
 
@@ -231,7 +241,7 @@ const service = {
         await service._connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
         needsDisconnect = true;
       }
-    }catch (err) {
+    } catch (err) {
       service.commandInProgress = false
       throw err
     }
