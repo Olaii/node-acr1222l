@@ -42,10 +42,18 @@ async function main() {
   await sleep(1000);
 
   // Display some images now
-  await reader.displayImage("./examples/assets/olaii_1.png");
+  await reader.displayImage("./examples/assets/dino_1.png");
   await sleep(2000);
-  await reader.displayImage("./examples/assets/olaii_2.png");
+  await reader.displayImage("./examples/assets/dino_2.png");
   await sleep(2000);
+
+  // Change display contrast
+  // for (let i = 0; i <= 15; i++) {
+  //   await reader.setLCDContrast(i);
+  //   await reader.writeToLCD(`Contrast: ${i}`);
+  //   await sleep(200);
+  // }
+  // await reader.setLCDContrast(10);
 
   // Display some text on the screen
   for (let i = 0; i <= reader.maxNumberOfCharacters; i++) {

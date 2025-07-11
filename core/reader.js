@@ -206,7 +206,7 @@ const service = {
     const reader = customReader || service.reader;
     return new Promise(function (resolve, reject) {
       if (!reader) return reject(new Error("Reader not connected"));
-      logger.log(`Sending to ${reader.id}:`, cmd);
+      // logger.info(`Sending to ${reader.id}:`, cmd);
       reader.control(cmd, reader.SCARD_CTL_CODE(3500), 40, function (err, data) {
         if (err) return reject(err);
         if (data[0] != 144) return reject(new Error("The operation failed.")); // Check if response is Buffer[0x90, 0x00] - The operation is completed successfully
@@ -235,7 +235,7 @@ const service = {
   */
   _wrapCommands: async function (cmds) {
     if (service.commandInProgress) {
-      logger.log("Command in progress. Ignoring")
+      logger.warning("Command in progress. Ignoring")
       return false;
     }
 
@@ -291,6 +291,16 @@ const service = {
   turnOffBacklight: async function () {
     logger.log('Turn off backlight');
     return await service._wrapCommands([reader_util.CMD_BACKLIGHT_OFF]);
+  },
+
+
+  /**
+  * Set LCD contrast
+  * * @param {number} contrast - Contrast level of LCD (0-15)
+  */
+  setLCDContrast: async function (contrast = 0) {
+    logger.log('Set LCD contrast:', contrast);
+    return await service._wrapCommands([reader_util.getLCDContrastControlCmd(contrast)]);
   },
 
 

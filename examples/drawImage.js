@@ -12,7 +12,7 @@ async function main() {
 
   await reader.clearLCD();
   await reader.turnOnBacklight();
-  await reader.displayImage("./examples/assets/dino.png");
+  await reader.displayImage("./examples/assets/dino_2.png");
 
   return;
 }
