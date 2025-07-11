@@ -300,6 +300,19 @@ const service = {
     ]);
   },
 
+  /**
+  * Display image
+  * Image must be PNG format with 128x32 pixels
+  * @param {string} imagePath - Path to PNG image file
+  */
+  displayImage: async function (imagePath) {
+    logger.log('Display image on LCD:', imagePath);
+    const buffers = await reader_util.getImageCmd(imagePath);
+    return await service._wrapCommands([
+      reader_util.CMD_BACKLIGHT_ON,
+      ...buffers
+    ]);
+  },
 
   /**
   * Clear reader screen
