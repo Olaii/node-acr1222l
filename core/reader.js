@@ -8,6 +8,7 @@ const AppError = require('./exceptions');
 const service = {
   initialized: false,
   reader: null,
+  readers: {},
   pcsc_instance: null,
   connectionProtocol: null,
   commandInProgress: false,
@@ -38,10 +39,8 @@ const service = {
 
       // Watch for PCSC reader messages
       service.pcsc_instance.on('reader', function (reader) {
-        if (!reader_util.isValidReader(reader)) {
-          // Close all other invalid readers
-          return reader.close();
-        }
+        reader.id = reader.name.replace("ACS ACR1222 3S PICC Reader ", "").replace(" ", "_").toUpperCase();
+        service.readers[reader.id] = reader;
 
         // Status handler
         reader.on('status', function (status) {
@@ -81,6 +80,8 @@ const service = {
         });
 
         logger.log('Reader found:', reader.name);
+
+        if (!reader_util.isValidReader(reader)) return;
         service.callback({ id: "READER_FOUND", name: "Reader was connected", data: reader });
         service.reader = reader;
       });
@@ -154,12 +155,13 @@ const service = {
   /**
   * Connect to reader with share mode and protocol
   */
-  _connect: async function (share_mode, protocol) {
+  _connect: async function (share_mode, protocol, customReader) {
+    const reader = customReader || service.reader;
     logger.log('Connect requested with SHARE_MODE=' + share_mode + ' and PROTOCOL=' + protocol);
-    if (service.reader.connected) return service.connectionProtocol;
+    if (reader.connected) return service.connectionProtocol;
 
     return new Promise(function (resolve, reject) {
-      service.reader.connect({ share_mode: share_mode, protocol: protocol }, function (err, protocol) {
+      reader.connect({ share_mode: share_mode, protocol: protocol }, function (err, protocol) {
         if (err) {
           logger.log('Error connecting with reader:', err);
           return reject(err);
@@ -175,14 +177,15 @@ const service = {
   /**
   * Disconnect from reader
   */
-  _disconnect: async function () {
-    if (!service.reader) {
+  _disconnect: async function (customReader) {
+    const reader = customReader || service.reader;
+    if (!reader) {
       logger.log('No reader to disconnect from');
       return true;
     }
 
     return new Promise(function (resolve, reject) {
-      service.reader.disconnect(service.reader.SCARD_LEAVE_CARD, function (err) {
+      reader.disconnect(reader.SCARD_LEAVE_CARD, function (err) {
         if (err) {
           logger.log('Error disconnecting:', err.message);
           return reject(err);
@@ -199,11 +202,14 @@ const service = {
   /**
   * Transmit control command
   */
-  transmitControl: async function (cmd) {
+  transmitControl: async function (cmd, customReader) {
+    const reader = customReader || service.reader;
     return new Promise(function (resolve, reject) {
-      if (!service.reader) return reject(new Error("Reader not connected"));
-      service.reader.control(cmd, service.reader.SCARD_CTL_CODE(3500), 40, function (err, data) {
+      if (!reader) return reject(new Error("Reader not connected"));
+      logger.log(`Sending to ${reader.id}:`, cmd);
+      reader.control(cmd, reader.SCARD_CTL_CODE(3500), 40, function (err, data) {
         if (err) return reject(err);
+        if (data[0] != 144) return reject(new Error("The operation failed.")); // Check if response is Buffer[0x90, 0x00] - The operation is completed successfully
         resolve(data);
       });
     });
@@ -237,10 +243,11 @@ const service = {
     let needsDisconnect = false;
 
     // wrapped in try catch to prevent reader in stuck state
+    const reader = service.readers.SAM_0;
     try {
-      if (service.reader && !service.reader.connected) {
-        await service._connect(service.reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL);
-        needsDisconnect = true;
+      if (reader && !reader.connected) {
+        await service._connect(reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL, reader);
+        if (!reader) needsDisconnect = true;
       }
     } catch (err) {
       service.commandInProgress = false
@@ -248,8 +255,8 @@ const service = {
     }
 
     try {
-      for (let i = 0; i < cmds.length; i++) {
-        await service.transmitControl(cmds[i]);
+      for (const cmd of cmds) {
+        await service.transmitControl(cmd, reader);
       }
     } catch (err) {
       logger.log("Error while transmitting command", err)
@@ -258,7 +265,7 @@ const service = {
     }
 
     try {
-      if (needsDisconnect) await service._disconnect();
+      if (needsDisconnect) await service._disconnect(reader);
     } catch (err) {
       logger.log("Error disconnecting from reader - _wrapCommands", err);
     }
