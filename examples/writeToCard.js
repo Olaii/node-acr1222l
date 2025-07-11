@@ -18,6 +18,8 @@ async function main() {
   // First let's initialize the reader. We will use the debug mode, so we can see the log output in console
   await reader.initialize(error_cb, debug = true);
 
+  await sleep(1000);
+
   // NTAG213 User space starts at 0x04
   // Let's check what's written there right now - we will read 4 bytes (size of the page)
   const data = await reader.readBytes(0x04, 4);

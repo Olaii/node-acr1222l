@@ -19,16 +19,18 @@ async function main() {
 
   await sleep(1000);
 
+  await reader.writeToLCD('Tap card', 'to read NDEF');
+
   // Read Card UUID. It will wait until the card is present.
   const ndef_obj = await reader.readNDEF(addr_start = 0x04, addr_end = 0x0C);
   console.log(ndef_obj);
-  await reader.writeToLCD('Card Message:', ndef_obj.ndef);
-
-  await sleep(2000);
-  await reader.clearLCD();
 
   // To stop the NDEF Read if card is not presented in time - let's say you want to stop from the GUI
   await reader.stopNDEFRead();
+
+  await reader.writeToLCD('Card NDEF:', ndef_obj.ndef);
+  await sleep(2000);
+  await reader.clearLCD();
 
   main();
 }
