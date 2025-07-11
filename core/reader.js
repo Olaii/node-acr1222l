@@ -626,6 +626,13 @@ const service = {
     ret[0] = array[ret.length - 1];
     return ret;
   },
+
+  /**
+  *  Sleep for a given number of milliseconds
+  */
+  _sleep: async function(ms = 1000) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 };
 
 

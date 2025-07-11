@@ -38,14 +38,16 @@ async function main() {
   //let's write something to the screen now
   await reader.writeToLCD('Hello world!', 'It is a nice day');
 
-  // Awesome. This worked. Let's keep the text for 2 more seconds and then clear the screen.
+  // Awesome. This worked. Let's keep the text for 1 more second
   await sleep(1000);
 
+  // Display some images now
   await reader.displayImage("./examples/assets/olaii_1.png");
   await sleep(2000);
   await reader.displayImage("./examples/assets/olaii_2.png");
   await sleep(2000);
 
+  // Display some text on the screen
   for (let i = 0; i <= reader.maxNumberOfCharacters; i++) {
     let line2 = "";
     for(let j = 0; j < i; j++) { line2 += "X";}
