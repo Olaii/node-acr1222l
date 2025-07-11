@@ -12,6 +12,7 @@ const service = {
   connectionProtocol: null,
   commandInProgress: false,
   cardPresent: false,
+  maxNumberOfCharacters: 16,
   waitingRequests: {},
   callback: function () { },
 
@@ -288,8 +289,8 @@ const service = {
 
   /**
   * Write to reader screen
-  * @param {string} row1 - Text for row 1
-  * @param {string} row2 - Text for row 2
+  * @param {string} row1 - Text for row 1 - max 16 characters
+  * @param {string} row2 - Text for row 2 - max 16 characters
   */
   writeToLCD: async function (row1 = '', row2 = '') {
     logger.log('Write to LCD:', row1, row2);
@@ -321,8 +322,7 @@ const service = {
     logger.log('Clear LCD');
     return await service._wrapCommands([
       reader_util.CMD_BACKLIGHT_OFF,
-      reader_util.getLCDTextCmd(' ', 1),
-      reader_util.getLCDTextCmd(' ', 2)
+      reader_util.getLCDClearCmd(),
     ]);
   },
 

@@ -17,6 +17,8 @@ async function main() {
   // First let's initialize the reader. We will use the debug mode, so we can see the log output in console
   await reader.initialize(error_cb, debug = true);
 
+  await sleep(1000);
+
   // Read Card UUID. It will wait until the card is present.
   const ndef_obj = await reader.readNDEF(addr_start = 0x04, addr_end = 0x0C);
   console.log(ndef_obj);

@@ -51,6 +51,10 @@ const service = {
     return Buffer.concat([Buffer.from([0xFF, 0x00, 0x68, row_cmd]), len, txt]);
   },
 
+  // 6.14.1 Clear LCD
+  getLCDClearCmd: function () {
+    return Buffer.from([0xFF, 0x00, 0x60, 0x00, 0x00]);
+  },
 
   // 6.14.4 LCD Display (Graphic Mode)
   getImageCmd: async function (imagePath) {
