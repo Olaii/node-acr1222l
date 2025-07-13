@@ -139,12 +139,12 @@ const service = {
       logger.log('Card present');
       service.cardPresent = true;
       try {
-        if (!service.commandInProgress) {
+        // if (!service.commandInProgress) {
           await service._connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
           reader_util.performCardPresentCallbacks(service.waitingRequests);
-        } else {
-          logger.log("There is already LCD command in progress. Cannot connect to card.")
-        }
+        // } else {
+        //   logger.log("There is already LCD command in progress. Cannot connect to card.")
+        // }
       } catch (err) {
         logger.log("Card present ERROR CONNECTING", err)
       }
