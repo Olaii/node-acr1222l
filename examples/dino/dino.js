@@ -38,7 +38,6 @@ async function main() {
 
       if (this.x < 30 && this.x > 0 && dinoJumping === false && gameStarted) {
         // Collision detection
-        console.log("Game Over");
         gameOver();
       }
     }

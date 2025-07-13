@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dino</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #000;
+    }
+
+    canvas {
+      border: 1px solid #000;
+      background: white;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="gameCanvas" width="128" height="32"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let gameStarted = false;
+    let dinoJumping = false;
+    let jumpTimer = 0;
+    let groundPosition = 0;
+
+    const startScreen = new Image();
+    startScreen.src = "start_screen.png";
+
+    const dinoRun1 = new Image();
+    dinoRun1.src = "dino_run1.png";
+    const dinoRun2 = new Image();
+    dinoRun2.src = "dino_run2.png";
+    let dinoImage = dinoRun1;
+
+    const cactus1 = new Image();
+    cactus1.src = "cactus_1.png";
+
+    const groundImage = new Image();
+    groundImage.src = "ground.png";
+
+    class Cactus {
+      constructor(x) {
+        this.x = x;
+      }
+
+      update() {
+        this.x -= 10; // Move cactus to the left
+        if (this.x < -13) { // If cactus is off screen
+          this.x = 128; // Reset position
+        }
+
+        if (this.x < 30 && this.x > 0 && dinoJumping === false) {
+          // Collision detection
+          console.log("Game Over");
+          gameOver();
+        }
+      }
+
+      draw() {
+        ctx.drawImage(cactus1, this.x, 5, 13, 25);
+      }
+    }
+
+    const cactus = new Cactus(130);
+
+    function drawStart() {
+      console.log("Drawing Start Screen");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(startScreen, 0, 0, 128, 32);
+    }
+
+    function drawDino() {
+      if (dinoImage == dinoRun1) dinoImage = dinoRun2;
+      else dinoImage = dinoRun1;
+      ctx.drawImage(dinoImage, 1, dinoJumping ? -20 : 0, 30, 32);
+    }
+
+    function drawGround() {
+      ctx.drawImage(groundImage, -groundPosition, 14, 2400, 18);
+    }
+
+    function update() {
+      if (!gameStarted) return;
+
+      // Reset the canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+      // Move the ground
+      groundPosition += 10;
+      if (groundPosition >= 2400) {
+        groundPosition = 0;
+      }
+
+      // Jump logic
+      jumpTimer += 1;
+      if (jumpTimer == 5) {
+        dinoJumping = false;
+      }
+
+
+      drawDino();
+      drawGround();
+
+      cactus.draw();
+      cactus.update();
+
+      setTimeout(update, 1000);
+    }
+
+    function gameOver() {
+      console.log("Game Over");
+      gameStarted = false;
+      drawStart();
+    }
+
+    function startGame() {
+      console.log("Game Started");
+      gameStarted = true;
+      dinoJumping = false;
+      jumpTimer = 0;
+      groundPosition = 0;
+      dinoImage = dinoRun1;
+      update();
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.code === 'Space' && !gameStarted) {
+        startGame();
+      }
+
+      if (event.code === 'Space' && !dinoJumping && gameStarted) {
+        dinoJumping = true;
+        jumpTimer = 0;
+      }
+    });
+
+    window.addEventListener("load", (event) => {
+      // drawStart();
+      startGame();
+    });
+
+  </script>
+</body>
+
+</html>
