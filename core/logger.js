@@ -14,7 +14,7 @@ const service = {
   },
 
   warning: function (message, ...args) {
-    if (service.debug) console.warning('[ACR1222L] ' + message, ...args)
+    if (service.debug) console.warn('[ACR1222L] ' + message, ...args)
   }
 };
 

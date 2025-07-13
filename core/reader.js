@@ -322,10 +322,11 @@ const service = {
   * Display image
   * Image must be PNG format with 128x32 pixels
   * @param {string} imagePath - Path to PNG image file
+  * @param {PNGWithMetadata} PNGWithMetadata - PNG image buffer
   */
-  displayImage: async function (imagePath) {
+  displayImage: async function (imagePath, PNGWithMetadata) {
     logger.log('Display image on LCD:', imagePath);
-    const buffers = await reader_util.getImageCmd(imagePath);
+    const buffers = await reader_util.getImageCmd(imagePath, PNGWithMetadata);
     return await service._wrapCommands([
       reader_util.CMD_BACKLIGHT_ON,
       ...buffers

@@ -63,15 +63,21 @@ const service = {
   },
 
   // 6.14.4 LCD Display (Graphic Mode)
-  getImageCmd: async function (imagePath) {
-    // Validate image path and type
-    if (!imagePath) throw new Error('Image path is required');
-    if (imagePath.substr(-4, 4) != ".png") throw new Error('Image must be a PNG file');
-
+  getImageCmd: async function (imagePath, PNGWithMetadata) {
     const fs = require('fs');
     const { PNG } = require('pngjs');
-    const data = fs.readFileSync(imagePath);
-    const png = PNG.sync.read(data);
+    let png = null;
+
+    // Validate image path and type
+    if (!PNGWithMetadata) {
+      if (!imagePath) throw new Error('Image path is required');
+      if (imagePath.substr(-4, 4) != ".png") throw new Error('Image must be a PNG file');
+      const data = fs.readFileSync(imagePath);
+      png = PNG.sync.read(data);
+    } else {
+      png = PNGWithMetadata;
+    }
+
     // Validate PNG dimensions
     if (png.width != 128) throw new Error('Image width must be 128 pixels');
     if (png.height != 32) throw new Error('Image height must be 32 pixels');

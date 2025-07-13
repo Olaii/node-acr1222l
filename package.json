@@ -10,13 +10,14 @@
     "readUUIDExample": "node examples/readUUID.js",
     "writeToCardExample": "node examples/writeToCard.js"
   },
-  "author": "Boris Savic",
+  "author": "Olaii d.o.o.",
   "license": "ISC",
   "dependencies": {
     "@pokusew/pcsclite": "0.6.0",
+    "pngjs": "7.0.0",
     "ndef": "0.2.0"
   },
   "devDependencies": {
-    "pngjs": "3.3.3"
+    "canvas": "3.1.2"
   }
 }
