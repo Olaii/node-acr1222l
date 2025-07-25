@@ -11,9 +11,8 @@ const service = {
   readers: {},
   pcsc_instance: null,
   connectionProtocol: null,
-  // commandInProgress: false,
   cardPresent: false,
-  // maxNumberOfCharacters: 16,
+  isReading: false,
   waitingRequests: {},
   callback: function () { },
 
@@ -61,7 +60,6 @@ const service = {
           if (reader_util.isValidReader(reader)) {
             service.reader = null;
             service.cardPresent = false;
-            // service.commandInProgress = false;
             reader.close();
 
             error_callback({ error: new Error(`Reader '${reader.id}' removed`), id: reader.id, error_code: 'READER_REMOVED' })
@@ -77,7 +75,6 @@ const service = {
           if (reader_util.isValidReader(reader)) {
             service.reader = null;
             service.cardPresent = false;
-            // service.commandInProgress = false;
           }
 
           service.readers[reader.id] = null;
@@ -123,7 +120,6 @@ const service = {
     service.cardPresent = false;
     reader_util.rejectWaitingRequestsCallbacks(service.waitingRequests);
     service.waitingRequests = {};
-    // service.commandInProgress = false;
   },
 
 
@@ -148,12 +144,8 @@ const service = {
       logger.log(`Reader '${reader.id}' card present`);
       service.cardPresent = true;
       try {
-        // if (!service.commandInProgress) {
-          await service._connect(reader_util.CONN_MODE(reader), reader_util.CARD_PROTOCOL);
-          reader_util.performCardPresentCallbacks(service.waitingRequests);
-        // } else {
-        //   logger.log("There is already LCD command in progress. Cannot connect to card.")
-        // }
+        await service._connect(reader_util.CONN_MODE(reader), reader_util.CARD_PROTOCOL);
+        reader_util.performCardPresentCallbacks(service.waitingRequests);
       } catch (err) {
         logger.log(`Reader '${reader.id}' card present ERROR CONNECTING`, err)
       }
@@ -189,7 +181,7 @@ const service = {
   _disconnect: async function (customReader) {
     const reader = customReader || service.reader;
     if (!reader) {
-      logger.log(`No reader '${reader.id}' to disconnect from`);
+      logger.log(`No reader to disconnect from`);
       return true;
     }
 
@@ -214,7 +206,7 @@ const service = {
   transmitControl: async function (cmd, customReader) {
     const reader = customReader || service.reader;
     return new Promise(function (resolve, reject) {
-      if (!reader) return reject(new Error(`Reader '${reader.id}' not connected`));
+      if (!reader) return reject(new Error(`No reader connected`));
       // logger.info(`Sending to ${reader.id}:`, cmd);
       reader.control(cmd, reader.SCARD_CTL_CODE(3500), 40, function (err, data) {
         if (err) return reject(err);
@@ -243,23 +235,13 @@ const service = {
   * Wrap commands with connection fallbacks
   */
   _wrapCommands: async function (cmds) {
-    // if (service.commandInProgress) {
-    //   logger.warning("Command in progress. Ignoring")
-    //   return false;
-    // }
-
-    // service.commandInProgress = true;
-    // let needsDisconnect = false;
-
     // wrapped in try catch to prevent reader in stuck state
     const reader = service.readers.SAM_0;
     try {
       if (reader && !reader.connected) {
         await service._connect(reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL, reader);
-        // if (!reader) needsDisconnect = true;
       }
     } catch (err) {
-      // service.commandInProgress = false
       throw err
     }
 
@@ -268,18 +250,11 @@ const service = {
         await service.transmitControl(cmd, reader);
       }
     } catch (err) {
-      logger.log(`Error while transmitting command to '${reader.id}'`, err)
-      // service.commandInProgress = false;
+      logger.log(`Error while transmitting command`, err)
       throw err;
     }
 
-    // try {
-    //   if (needsDisconnect) await service._disconnect(reader);
-    // } catch (err) {
-    //   logger.log("Error disconnecting from reader - _wrapCommands", err);
-    // }
-
-    // service.commandInProgress = false;
+    // await service._disconnect(reader);
 
     return true;
   },
@@ -545,6 +520,7 @@ const service = {
   * Read NDEF data
   */
   readNDEF: async function (addr_start = 0x04, addr_end = 0x27) {
+    logger.log('Read NDEF');
     if (!service.cardPresent) {
       return new Promise(function (resolve, reject) {
         // Wait for the card to be attached

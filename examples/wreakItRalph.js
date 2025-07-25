@@ -13,28 +13,38 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function writeToLcd() {
+  return reader.writeToLCD('Tap card', String(Date.now()));
+}
+
+
+async function startReading() {
+  await reader.readNDEF(addr_start = 0x04, addr_end = 0x0C);
+  return await reader.stopNDEFRead();
+}
+
+
+function randomIntFromInterval(min, max) { // min and max included 
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
 async function main() {
   try {
     // First let's initialize the reader. We will use the debug mode, so we can see the log output in console
     await reader.initialize(error_cb, debug = true);
+    console.log(Date.now())
 
     await sleep(1000);
 
-    await reader.writeToLCD('Tap card', 'to read NDEF');
+    // reader.readNDEF(addr_start = 0x04, addr_end = 0x0C);
 
-    // Read Card UUID. It will wait until the card is present.
-    const ndef_obj = await reader.readNDEF(addr_start = 0x04, addr_end = 0x0C);
-    console.log(ndef_obj);
-
-    // To stop the NDEF Read if card is not presented in time - let's say you want to stop from the GUI
-    await reader.stopNDEFRead();
-
-    await reader.writeToLCD('Card NDEF:', ndef_obj.ndef);
-    await sleep(2000);
-    await reader.clearLCD();
-
-    main();
+    while (true) {
+      startReading();
+      writeToLcd();
+      await sleep(randomIntFromInterval(0, 100));
+    }
   } catch(e) {
+    console.error(e);
     setTimeout(() => {
       main();
     }, 1000);
