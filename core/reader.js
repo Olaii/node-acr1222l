@@ -11,9 +11,9 @@ const service = {
   readers: {},
   pcsc_instance: null,
   connectionProtocol: null,
-  commandInProgress: false,
+  // commandInProgress: false,
   cardPresent: false,
-  maxNumberOfCharacters: 16,
+  // maxNumberOfCharacters: 16,
   waitingRequests: {},
   callback: function () { },
 
@@ -44,46 +44,54 @@ const service = {
 
         // Status handler
         reader.on('status', function (status) {
-          service.handleStatusChange(status);
+          service.handleStatusChange(status, reader);
         });
 
         // Reader removed handler
         reader.on('end', async function () {
-          logger.log('Reader removed - reader end');
-          service.callback({ id: "READER_END", name: "Reader was disconnected" });
+          logger.log(`Reader ${reader.id} removed - reader end`);
+          service.callback({ id: "READER_END", id: reader.id, name: `Reader '${reader.id}' was disconnected` });
 
           try {
             await service._disconnect();
           } catch (err) {
-            logger.log("Reader end disconnect error:", err);
+            logger.log(`Reader '${reader.id}' end disconnect error:`, err);
           }
-          service.reader = null;
-          service.cardPresent = false;
-          service.commandInProgress = false;
-          reader.close();
 
-          error_callback({ error: new Error('Reader removed'), error_code: 'READER_REMOVED' })
-          service.closePCSC();
-          await service.initialize(error_callback, debug);
+          if (reader_util.isValidReader(reader)) {
+            service.reader = null;
+            service.cardPresent = false;
+            // service.commandInProgress = false;
+            reader.close();
+
+            error_callback({ error: new Error(`Reader '${reader.id}' removed`), id: reader.id, error_code: 'READER_REMOVED' })
+            service.closePCSC();
+            await service.initialize(error_callback, debug);
+          }
         });
 
         // Reader error handler
         reader.on('error', function (err) {
-          logger.log('Reader error occurred:', err);
+          logger.log(`Reader '${reader.id}' error occurred:`, err);
 
-          // service.reader = null;
-          service.cardPresent = false;
-          service.commandInProgress = false;
-          // reader.close();
+          if (reader_util.isValidReader(reader)) {
+            service.reader = null;
+            service.cardPresent = false;
+            // service.commandInProgress = false;
+          }
 
-          error_callback({ error: err, error_code: 'READER_ERROR' });
+          service.readers[reader.id] = null;
+          reader.close();
+
+          error_callback({ id: reader.id, error: err, error_code: 'READER_ERROR' });
         });
 
         logger.log('Reader found:', reader.name);
 
-        if (!reader_util.isValidReader(reader)) return;
-        service.callback({ id: "READER_FOUND", name: "Reader was connected", data: reader });
-        service.reader = reader;
+        if (reader_util.isValidReader(reader)) {
+          service.callback({ id: "READER_FOUND", name: `Reader '${reader.id}' was connected`, id: reader.id, data: reader });
+          service.reader = reader;
+        }
       });
 
       // Resolve init at this point
@@ -115,7 +123,7 @@ const service = {
     service.cardPresent = false;
     reader_util.rejectWaitingRequestsCallbacks(service.waitingRequests);
     service.waitingRequests = {};
-    service.commandInProgress = false;
+    // service.commandInProgress = false;
   },
 
 
@@ -123,30 +131,31 @@ const service = {
   * Handle reader status change
   * @return {void}
   */
-  handleStatusChange: async function (status) {
-    const changes = service.reader.state ^ status.state;
+  handleStatusChange: async function (status, customReader) {
+    const reader = customReader || service.reader;
+    const changes = reader.state ^ status.state;
 
-    if (service.reader.state && (changes & service.reader.SCARD_STATE_EMPTY) && (status.state & service.reader.SCARD_STATE_EMPTY)) {
-      logger.log('Card removed');
+    if (reader.state && (changes & reader.SCARD_STATE_EMPTY) && (status.state & reader.SCARD_STATE_EMPTY)) {
+      logger.log(`Card removed on reader '${reader.id}'`);
       service.cardPresent = false;
 
       try {
         await service._disconnect();
       } catch (err) {
-        logger.log("Handle status change disconnect error:", err);
+        logger.log(`Reader '${reader.id}' handle status change disconnect error:`, err);
       }
-    } else if ((changes & service.reader.SCARD_STATE_PRESENT) && (status.state & service.reader.SCARD_STATE_PRESENT)) {
-      logger.log('Card present');
+    } else if ((changes & reader.SCARD_STATE_PRESENT) && (status.state & reader.SCARD_STATE_PRESENT)) {
+      logger.log(`Reader '${reader.id}' card present`);
       service.cardPresent = true;
       try {
         // if (!service.commandInProgress) {
-          await service._connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
+          await service._connect(reader_util.CONN_MODE(reader), reader_util.CARD_PROTOCOL);
           reader_util.performCardPresentCallbacks(service.waitingRequests);
         // } else {
         //   logger.log("There is already LCD command in progress. Cannot connect to card.")
         // }
       } catch (err) {
-        logger.log("Card present ERROR CONNECTING", err)
+        logger.log(`Reader '${reader.id}' card present ERROR CONNECTING`, err)
       }
     }
   },
@@ -157,16 +166,16 @@ const service = {
   */
   _connect: async function (share_mode, protocol, customReader) {
     const reader = customReader || service.reader;
-    logger.log('Connect requested with SHARE_MODE=' + share_mode + ' and PROTOCOL=' + protocol);
+    logger.log(`Connect '${reader.id}' requested with SHARE_MODE=` + share_mode + ' and PROTOCOL=' + protocol);
     if (reader.connected) return service.connectionProtocol;
 
     return new Promise(function (resolve, reject) {
       reader.connect({ share_mode: share_mode, protocol: protocol }, function (err, protocol) {
         if (err) {
-          logger.log('Error connecting with reader:', err);
+          logger.log(`Error connecting with reader '${reader.id}':`, err);
           return reject(err);
         }
-        logger.log('Connected with protocol:', protocol);
+        logger.log(`Reader '${reader.id}' connected with protocol:`, protocol);
         service.connectionProtocol = protocol;
         resolve(protocol);
       });
@@ -180,17 +189,17 @@ const service = {
   _disconnect: async function (customReader) {
     const reader = customReader || service.reader;
     if (!reader) {
-      logger.log('No reader to disconnect from');
+      logger.log(`No reader '${reader.id}' to disconnect from`);
       return true;
     }
 
     return new Promise(function (resolve, reject) {
       reader.disconnect(reader.SCARD_LEAVE_CARD, function (err) {
         if (err) {
-          logger.log('Error disconnecting:', err.message);
+          logger.log(`Error '${reader.id}' disconnecting:`, err.message);
           return reject(err);
         }
-        logger.log('Disconnected');
+        logger.log(`Disconnected '${reader.id}'`);
         // Clean variables
         service.connectionProtocol = null;
         resolve(true);
@@ -205,11 +214,11 @@ const service = {
   transmitControl: async function (cmd, customReader) {
     const reader = customReader || service.reader;
     return new Promise(function (resolve, reject) {
-      if (!reader) return reject(new Error("Reader not connected"));
+      if (!reader) return reject(new Error(`Reader '${reader.id}' not connected`));
       // logger.info(`Sending to ${reader.id}:`, cmd);
       reader.control(cmd, reader.SCARD_CTL_CODE(3500), 40, function (err, data) {
         if (err) return reject(err);
-        if (data[0] != 144) return reject(new Error("The operation failed.")); // Check if response is Buffer[0x90, 0x00] - The operation is completed successfully
+        if (data[0] != 144) return reject(new Error(`Control operation failed on reader '${reader.id}'.`)); // Check if response is Buffer[0x90, 0x00] - The operation is completed successfully
         resolve(data);
       });
     });
@@ -221,7 +230,7 @@ const service = {
   */
   transmit: async function (cmd) {
     return new Promise(function (resolve, reject) {
-      if (!service.reader) return reject(new Error("Reader not connected"));
+      if (!service.reader) return reject(new Error(`Reader '${reader.id}' not connected`));
       service.reader.transmit(cmd, 1024, service.connectionProtocol, function (err, data) {
         if (err) return reject(err);
         resolve(data);
@@ -234,23 +243,23 @@ const service = {
   * Wrap commands with connection fallbacks
   */
   _wrapCommands: async function (cmds) {
-    if (service.commandInProgress) {
-      logger.warning("Command in progress. Ignoring")
-      return false;
-    }
+    // if (service.commandInProgress) {
+    //   logger.warning("Command in progress. Ignoring")
+    //   return false;
+    // }
 
-    service.commandInProgress = true;
-    let needsDisconnect = false;
+    // service.commandInProgress = true;
+    // let needsDisconnect = false;
 
     // wrapped in try catch to prevent reader in stuck state
     const reader = service.readers.SAM_0;
     try {
       if (reader && !reader.connected) {
         await service._connect(reader.SCARD_SHARE_DIRECT, reader_util.CTRL_PROTOCOL, reader);
-        if (!reader) needsDisconnect = true;
+        // if (!reader) needsDisconnect = true;
       }
     } catch (err) {
-      service.commandInProgress = false
+      // service.commandInProgress = false
       throw err
     }
 
@@ -259,18 +268,18 @@ const service = {
         await service.transmitControl(cmd, reader);
       }
     } catch (err) {
-      logger.log("Error while transmitting command", err)
-      service.commandInProgress = false;
+      logger.log(`Error while transmitting command to '${reader.id}'`, err)
+      // service.commandInProgress = false;
       throw err;
     }
 
-    try {
-      if (needsDisconnect) await service._disconnect(reader);
-    } catch (err) {
-      logger.log("Error disconnecting from reader - _wrapCommands", err);
-    }
+    // try {
+    //   if (needsDisconnect) await service._disconnect(reader);
+    // } catch (err) {
+    //   logger.log("Error disconnecting from reader - _wrapCommands", err);
+    // }
 
-    service.commandInProgress = false;
+    // service.commandInProgress = false;
 
     return true;
   },
