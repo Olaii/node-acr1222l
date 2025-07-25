@@ -49,7 +49,7 @@ const service = {
         // Reader removed handler
         reader.on('end', async function () {
           logger.log(`Reader ${reader.id} removed - reader end`);
-          service.callback({ id: "READER_END", id: reader.id, name: `Reader '${reader.id}' was disconnected` });
+          service.callback({ id: "READER_END", reader: reader.id, message: `Reader '${reader.id}' was disconnected` });
 
           try {
             await service._disconnect();
@@ -59,10 +59,10 @@ const service = {
 
           if (reader_util.isValidReader(reader)) {
             service.reader = null;
-            service.cardPresent = false;
+            service.setCardPresent(false, reader);
             reader.close();
 
-            error_callback({ error: new Error(`Reader '${reader.id}' removed`), id: reader.id, error_code: 'READER_REMOVED' })
+            error_callback({ error: new Error(`Reader '${reader.id}' removed`), reader: reader.id, error_code: 'READER_REMOVED' })
             service.closePCSC();
             await service.initialize(error_callback, debug);
           }
@@ -74,7 +74,7 @@ const service = {
 
           if (reader_util.isValidReader(reader)) {
             service.reader = null;
-            service.cardPresent = false;
+            service.setCardPresent(false, reader);
           }
 
           service.readers[reader.id] = null;
@@ -86,7 +86,7 @@ const service = {
         logger.log('Reader found:', reader.name);
 
         if (reader_util.isValidReader(reader)) {
-          service.callback({ id: "READER_FOUND", name: `Reader '${reader.id}' was connected`, id: reader.id, data: reader });
+          service.callback({ id: "READER_FOUND", reader: reader.id, message: `Reader '${reader.id}' was connected`, data: reader });
           service.reader = reader;
         }
       });
@@ -117,11 +117,23 @@ const service = {
     service.reader = null;
     service.pcsc_instance = null;
     service.connectionProtocol = null;
-    service.cardPresent = false;
+    service.setCardPresent(false, null);
     reader_util.rejectWaitingRequestsCallbacks(service.waitingRequests);
     service.waitingRequests = {};
   },
 
+  /**
+  * Set card present flag
+  * @param {boolean} isPresent - is card present
+  * @param {object} reader - reader
+  * @return {void}
+  */
+  setCardPresent: function(isPresent, reader) {
+    service.cardPresent = isPresent;
+    const readerId = reader ? reader.id : "";
+    if (isPresent) service.callback({ id: "CARD_PRESENT", reader: readerId, message: `Reader '${readerId}' was disconnected` });
+    else service.callback({ id: "CARD_REMOVED", reader: readerId, message: `Reader '${readerId}' was disconnected` });
+  },
 
   /**
   * Handle reader status change
@@ -133,7 +145,7 @@ const service = {
 
     if (reader.state && (changes & reader.SCARD_STATE_EMPTY) && (status.state & reader.SCARD_STATE_EMPTY)) {
       logger.log(`Card removed on reader '${reader.id}'`);
-      service.cardPresent = false;
+      service.setCardPresent(false, reader);
 
       try {
         await service._disconnect();
@@ -142,7 +154,7 @@ const service = {
       }
     } else if ((changes & reader.SCARD_STATE_PRESENT) && (status.state & reader.SCARD_STATE_PRESENT)) {
       logger.log(`Reader '${reader.id}' card present`);
-      service.cardPresent = true;
+      service.setCardPresent(true, reader);
       try {
         await service._connect(reader_util.CONN_MODE(reader), reader_util.CARD_PROTOCOL);
         reader_util.performCardPresentCallbacks(service.waitingRequests);
