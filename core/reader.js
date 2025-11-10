@@ -1,4 +1,4 @@
-let pcsc = require('@pokusew/pcsclite');
+let pcsc = require('@Olaii/pcsclite');
 const reader_util = require('./reader_util');
 const logger = require('./logger');
 const des = require('./DESede');
