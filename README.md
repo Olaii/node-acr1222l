@@ -1,4 +1,4 @@
-# ACR1222L v0.6.3
+# ACR1222L v0.6.4
 
 Node.js wrapper for ACR1222L NFC reader. Library for easier connecting and management of ACR1222L NFC reader. This library is tested on Windows and Linux.
 
@@ -53,7 +53,7 @@ npm install -g nw-gyp
 Manually rebuild the `pcsc` library.
 
 ```bash
-cd node_modules/@pokusew/pcsclite
+cd node_modules/@Olaii/pcsclite
 
 nw-gyp configure --target=0.20.3 // Use the appropriate NWJS version
 nw-gyp rebuild --target=0.20.3
