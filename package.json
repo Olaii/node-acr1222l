@@ -13,7 +13,7 @@
   "author": "Boris Savic",
   "license": "ISC",
   "dependencies": {
-    "@Olaii/pcsclite": "github:Olaii/node-pcsclite.git#0.6.3",
+    "@Olaii/pcsclite": "github:Olaii/node-pcsclite.git#1.0.0",
     "pngjs": "7.0.0",
     "ndef": "0.2.0"
   },
