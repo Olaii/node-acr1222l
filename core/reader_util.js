@@ -8,9 +8,18 @@ const service = {
   CTRL_PROTOCOL: (isWin ? 0 : 4),  // 0 for Windows, 4 for macOS and Linux
   CARD_PROTOCOL: 3,  // T1 or T0 - card will decide.
   CONN_MODE: function (reader) {
-    return isWin ? reader.SCARD_SHARE_SHARED : reader.SCARD_SHARE_DIRECT
+    return reader.SCARD_SHARE_SHARED
   },
   // Reader Commands
+  // Card reactivation ("WUPA"). Wakes a card that dropped to HALT after a NAK
+  // (e.g. reading a password-protected config page) so the next command, such
+  // as PWD_AUTH, can run. The two OSes drive this reader through different
+  // driver stacks and need different framings — verified working per-OS:
+  //   Windows: bare PN532 InSelect frame        (ACS driver forwards it as-is)
+  //   macOS  : ACR-escaped InListPassiveTarget   (strict CCID stack; re-poll)
+  CMD_REACTIVATE: isWin
+    ? Buffer.from([0xD4, 0x54, 0x01])
+    : Buffer.from([0xFF, 0x00, 0x00, 0x00, 0x04, 0xD4, 0x4A, 0x01, 0x00]),
   CMD_BACKLIGHT_ON: Buffer.from([0xFF, 0x00, 0x64, 0xFF, 0x00]),
   CMD_BACKLIGHT_OFF: Buffer.from([0xFF, 0x00, 0x64, 0x00, 0x00]),
   CMD_READ_UUID: Buffer.from([0xFF, 0xCA, 0x00, 0x00, 0x00]),

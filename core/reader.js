@@ -222,6 +222,23 @@ const service = {
     });
   },
 
+  /**
+  * Reactivate ("wake") a card that dropped to HALT after a failed access, so
+  * the next command (e.g. PWD_AUTH) can run. The exact frame is platform
+  * specific — see reader_util.CMD_REACTIVATE.
+  *
+  * Alternative (Option A): a driver-level warm reset works on both OSes with no
+  * hand-built frame — disconnect(SCARD_RESET_CARD) then _connect(). Left as the
+  * raw-frame form for now because those frames are already verified per-OS:
+  *
+  *   await new Promise((res, rej) => service.reader.disconnect(
+  *     service.reader.SCARD_RESET_CARD, e => e ? rej(e) : (service.connectionProtocol = null, res())));
+  *   return service._connect(reader_util.CONN_MODE(service.reader), reader_util.CARD_PROTOCOL);
+  */
+  reactivateCard: async function () {
+    logger.log('Reactivate card');
+    return await service.transmit(reader_util.CMD_REACTIVATE);
+  },
 
   /**
   * Wrap commands with connection fallbacks
@@ -518,7 +535,7 @@ const service = {
         data = await service.fastRead(addr_start, addr_end);
       } catch (err) {
         logger.log('Fast read command failed. Retrying with READ command');
-        await service.transmit(Buffer.from([0xD4, 0x54, 0x01])); // WUPA
+        await service.reactivateCard();
 
         data = Buffer.alloc(0);
         let addr = addr_start;
