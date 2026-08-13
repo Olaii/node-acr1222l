@@ -576,7 +576,7 @@ const service = {
   fastRead: async function (addr_start = 0x04, addr_end = 0x27) {
     logger.log('Fast read requested from page: ' + addr_start + ' to page: ' + addr_end);
 
-    const response = await service.transmit(reader_util.wrapCmd(0x3A, Buffer.from([addr_start, addr_end])));
+    let response = await service.transmit(reader_util.wrapCmd(0x3A, Buffer.from([addr_start, addr_end])));
 
     if (response[2] === 0x00) {
       response = response.slice(3, -2);
