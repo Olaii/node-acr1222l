@@ -396,10 +396,44 @@ const service = {
   * its turn.
   */
   _wrapCommands: async function (cmds) {
+    // Callers often issue LCD commands right after initialize(), before the
+    // reader-enumeration events have fired, or before the reader is plugged in.
+    // Wait (bounded) for a usable handle instead of failing with a confusing
+    // "Reader not connected".
+    await service._awaitLcdReady();
+
     if (service.peripheralReader) {
       return service._lcdRun(function () { return service._runLCDCommandsPeripheral(cmds); });
     }
-    return service._cardRun(function () { return service._runLCDCommandsPICC(cmds); });
+    if (service.reader) {
+      return service._cardRun(function () { return service._runLCDCommandsPICC(cmds); });
+    }
+    throw new AppError('No reader available for LCD commands', 'NO_READER');
+  },
+
+  /**
+  * Wait until a handle capable of carrying LCD escape commands is available.
+  * Prefers the dedicated peripheral handle; on hardware the SAM handles appear
+  * in the same enumeration burst as the PICC, so a short grace period lets the
+  * peripheral handle win before we consider the PICC fallback.
+  *
+  * @param {number} timeoutMs - max time to wait for any handle
+  * @param {number} peripheralGraceMs - extra wait for the peripheral handle once
+  *   the PICC handle is present
+  */
+  _awaitLcdReady: async function (timeoutMs = 5000, peripheralGraceMs = 750) {
+    const start = Date.now();
+    let readerSeenAt = null;
+
+    while (!service.peripheralReader) {
+      if (service.reader) {
+        if (readerSeenAt === null) readerSeenAt = Date.now();
+        // PICC is up; give the peripheral handle a brief chance, then fall back.
+        if (Date.now() - readerSeenAt >= peripheralGraceMs) return;
+      }
+      if (Date.now() - start >= timeoutMs) return;
+      await new Promise(function (r) { setTimeout(r, 50); });
+    }
   },
 
   _runLCDCommandsPeripheral: async function (cmds) {
