@@ -504,9 +504,19 @@ const service = {
 
 
   /**
+  * Set LCD contrast
+  * @param {number} contrast - Contrast level of LCD (0-15)
+  */
+  setLCDContrast: async function (contrast = 0) {
+    logger.log('Set LCD contrast:', contrast);
+    return await service._wrapCommands([reader_util.getLCDContrastControlCmd(contrast)]);
+  },
+
+
+  /**
   * Write to reader screen
-  * @param {string} row1 - Text for row 1
-  * @param {string} row2 - Text for row 2
+  * @param {string} row1 - Text for row 1 - max 16 characters
+  * @param {string} row2 - Text for row 2 - max 16 characters
   */
   writeToLCD: async function (row1 = '', row2 = '') {
     logger.log('Write to LCD:', row1, row2);
@@ -519,14 +529,29 @@ const service = {
 
 
   /**
+  * Display image
+  * Image must be PNG format with 128x32 pixels
+  * @param {string} imagePath - Path to PNG image file
+  * @param {PNGWithMetadata} PNGWithMetadata - PNG image buffer
+  */
+  displayImage: async function (imagePath, PNGWithMetadata) {
+    logger.log('Display image on LCD:', imagePath);
+    const buffers = await reader_util.getImageCmd(imagePath, PNGWithMetadata);
+    return await service._wrapCommands([
+      reader_util.CMD_BACKLIGHT_ON,
+      ...buffers
+    ]);
+  },
+
+
+  /**
   * Clear reader screen
   */
   clearLCD: async function () {
     logger.log('Clear LCD');
     return await service._wrapCommands([
       reader_util.CMD_BACKLIGHT_OFF,
-      reader_util.getLCDTextCmd(' ', 1),
-      reader_util.getLCDTextCmd(' ', 2)
+      reader_util.getLCDClearCmd(),
     ]);
   },
 
@@ -853,6 +878,14 @@ const service = {
     }
     ret[0] = array[ret.length - 1];
     return ret;
+  },
+
+
+  /**
+  *  Sleep for a given number of milliseconds
+  */
+  _sleep: async function (ms = 1000) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   },
 };
 
