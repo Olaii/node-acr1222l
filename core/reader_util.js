@@ -71,42 +71,35 @@ const service = {
     return Buffer.from([0xFF, 0x00, 0x6C, contrast, 0x00]);
   },
 
-  // 6.14.4 LCD Display (Graphic Mode)
-  //
-  // The ACR1222L LCD (128x32) is addressed by LINE, not by 16x16 block. Each
-  // "LCD Display" command is:
-  //     FF 00 6A <lineIndex> <Lc> <pixel bytes...>
-  // where lineIndex is 0x00..0x1F (top to bottom), each line is 16 bytes wide
-  // (128 px, MSB = leftmost pixel, bit = 1 lit), and Lc (pixel data length) may
-  // be up to 0x80 (128 bytes = 8 lines) per command. We pack the whole 32x128
-  // frame and send it as 4 commands of 8 lines each (line 0x00, 0x08, 0x10,
-  // 0x18). Verified against firmware ACR1222L-U V314.00.
-  getImageCmd: async function (imagePath, PNGWithMetadata) {
-    const fs = require('fs');
-    const { PNG } = require('pngjs');
-    let png = null;
+  // LCD geometry (128x32, 1bpp)
+  LCD_WIDTH: 128,
+  LCD_HEIGHT: 32,
+  LCD_BYTES_PER_LINE: 16,   // 128 px / 8
+  LCD_MAX_LINES_PER_CMD: 8, // 8 lines * 16 bytes = 128 bytes = 0x80 (max Lc)
 
-    // Validate image path and type
+  // Pack a 128x32 image (PNG path or a decoded {width,height,data:RGBA} object)
+  // into a line-major, 1-bit framebuffer (HEIGHT * 16 = 512 bytes). Byte 0 of a
+  // line holds x=0..7 (bit 7 = x=0); a pixel is "lit" (bit = 1) when opaque and
+  // dark. This is the pixel source shared by getImageCmd / getImageDiffCmd.
+  buildImageFrame: function (imagePath, PNGWithMetadata) {
+    const WIDTH = service.LCD_WIDTH;
+    const HEIGHT = service.LCD_HEIGHT;
+    const BYTES_PER_LINE = service.LCD_BYTES_PER_LINE;
+
+    let png = null;
     if (!PNGWithMetadata) {
+      const fs = require('fs');
+      const { PNG } = require('pngjs');
       if (!imagePath) throw new Error('Image path is required');
       if (imagePath.substr(-4, 4) != ".png") throw new Error('Image must be a PNG file');
-      const data = fs.readFileSync(imagePath);
-      png = PNG.sync.read(data);
+      png = PNG.sync.read(fs.readFileSync(imagePath));
     } else {
       png = PNGWithMetadata;
     }
 
-    const WIDTH = 128;
-    const HEIGHT = 32;
-    const BYTES_PER_LINE = WIDTH / 8; // 16
-
-    // Validate PNG dimensions
     if (png.width != WIDTH) throw new Error('Image width must be 128 pixels');
     if (png.height != HEIGHT) throw new Error('Image height must be 32 pixels');
 
-    // Pack the image into a line-major, 1-bit framebuffer.
-    // Byte layout per line: byte 0 holds x=0..7 (bit 7 = x=0), byte 15 holds
-    // x=120..127. A pixel is "lit" (bit = 1) when it is opaque and dark.
     const frame = Buffer.alloc(HEIGHT * BYTES_PER_LINE);
     for (let y = 0; y < HEIGHT; y++) {
       for (let x = 0; x < WIDTH; x++) {
@@ -120,20 +113,60 @@ const service = {
         }
       }
     }
+    return frame;
+  },
 
-    // Split into commands of at most 8 lines (0x80 bytes of pixel data) each.
-    const LINES_PER_CMD = 8;
-    const buffers = [];
-    for (let line = 0; line < HEIGHT; line += LINES_PER_CMD) {
-      const start = line * BYTES_PER_LINE;
-      const chunk = frame.slice(start, start + LINES_PER_CMD * BYTES_PER_LINE);
-      buffers.push(Buffer.concat([
-        Buffer.from([0xFF, 0x00, 0x6A, line, chunk.length]),
-        chunk
-      ]));
+  // Build one graphic-mode command (6.14.4): FF 00 6A <lineIndex> <Lc> <pixels>.
+  getLCDGraphicCmd: function (lineIndex, chunk) {
+    return Buffer.concat([Buffer.from([0xFF, 0x00, 0x6A, lineIndex, chunk.length]), chunk]);
+  },
+
+  // Turn a set of changed line indices into the fewest commands: consecutive
+  // changed lines are coalesced, then split into runs of at most 8 lines. Each
+  // graphic write costs ~1.1 ms/byte on the reader, so sending only changed
+  // lines is the main lever for faster animation.
+  _framebufferCmds: function (frame, changedLines) {
+    const BPL = service.LCD_BYTES_PER_LINE;
+    const MAX = service.LCD_MAX_LINES_PER_CMD;
+    const cmds = [];
+    let i = 0;
+    while (i < changedLines.length) {
+      const start = changedLines[i];
+      let count = 1;
+      // extend while lines stay consecutive and run length stays within one cmd
+      while (i + count < changedLines.length &&
+             changedLines[i + count] === start + count &&
+             count < MAX) {
+        count++;
+      }
+      const from = start * BPL;
+      cmds.push(service.getLCDGraphicCmd(start, frame.slice(from, from + count * BPL)));
+      i += count;
     }
+    return cmds;
+  },
 
-    return buffers;
+  // Full redraw: every line.
+  getImageCmdFromFrame: function (frame) {
+    const lines = [];
+    for (let y = 0; y < service.LCD_HEIGHT; y++) lines.push(y);
+    return service._framebufferCmds(frame, lines);
+  },
+
+  // Incremental redraw: only lines that differ from prevFrame.
+  getImageDiffCmdFromFrame: function (frame, prevFrame) {
+    const BPL = service.LCD_BYTES_PER_LINE;
+    const lines = [];
+    for (let y = 0; y < service.LCD_HEIGHT; y++) {
+      const s = y * BPL;
+      if (Buffer.compare(frame.slice(s, s + BPL), prevFrame.slice(s, s + BPL)) !== 0) lines.push(y);
+    }
+    return service._framebufferCmds(frame, lines);
+  },
+
+  // Backwards-compatible full-image command builder.
+  getImageCmd: async function (imagePath, PNGWithMetadata) {
+    return service.getImageCmdFromFrame(service.buildImageFrame(imagePath, PNGWithMetadata));
   },
 
 

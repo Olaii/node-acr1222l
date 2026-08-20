@@ -14,6 +14,7 @@ const service = {
   cardPresent: false,
   waitingRequests: {},
   callback: function () { },
+  _lastFrame: null, // last framebuffer sent to the LCD, for incremental redraw
 
   // Two independent FIFO locks, one per physical handle. The ACR1222L exposes
   // the contactless card on the PICC handle and drives its LCD/LED/buzzer as
@@ -520,6 +521,10 @@ const service = {
   */
   writeToLCD: async function (row1 = '', row2 = '') {
     logger.log('Write to LCD:', row1, row2);
+    // Text (ASCII mode) changes the screen; drop the graphic baseline so the
+    // next displayImage does a full redraw rather than diffing against a frame
+    // that is no longer on screen.
+    service._lastFrame = null;
     return await service._wrapCommands([
       reader_util.CMD_BACKLIGHT_ON,
       reader_util.getLCDTextCmd(row1, 1),
@@ -530,17 +535,32 @@ const service = {
 
   /**
   * Display image
-  * Image must be PNG format with 128x32 pixels
+  * Image must be PNG format with 128x32 pixels.
+  *
+  * Only the lines that changed since the previous displayImage are sent. Each
+  * graphic write costs ~1.1 ms/byte on the reader, so on animation (repeated
+  * displayImage calls) this can be dramatically faster than a full 512-byte
+  * redraw. The first call after init/clear/writeToLCD redraws in full.
   * @param {string} imagePath - Path to PNG image file
   * @param {PNGWithMetadata} PNGWithMetadata - PNG image buffer
   */
   displayImage: async function (imagePath, PNGWithMetadata) {
     logger.log('Display image on LCD:', imagePath);
-    const buffers = await reader_util.getImageCmd(imagePath, PNGWithMetadata);
-    return await service._wrapCommands([
-      reader_util.CMD_BACKLIGHT_ON,
-      ...buffers
-    ]);
+    const frame = reader_util.buildImageFrame(imagePath, PNGWithMetadata);
+
+    let cmds;
+    if (service._lastFrame && service._lastFrame.length === frame.length) {
+      // Incremental: send only changed lines. Backlight is assumed already on.
+      cmds = reader_util.getImageDiffCmdFromFrame(frame, service._lastFrame);
+    } else {
+      // Full redraw (also (re)assert the backlight).
+      cmds = [reader_util.CMD_BACKLIGHT_ON].concat(reader_util.getImageCmdFromFrame(frame));
+    }
+
+    service._lastFrame = frame;
+
+    if (cmds.length === 0) return true; // nothing changed on screen
+    return await service._wrapCommands(cmds);
   },
 
 
@@ -549,6 +569,7 @@ const service = {
   */
   clearLCD: async function () {
     logger.log('Clear LCD');
+    service._lastFrame = null;
     return await service._wrapCommands([
       reader_util.CMD_BACKLIGHT_OFF,
       reader_util.getLCDClearCmd(),

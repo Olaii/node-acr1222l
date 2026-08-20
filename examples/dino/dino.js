@@ -2,7 +2,6 @@ const { createCanvas, loadImage } = require('canvas')
 const canvas = createCanvas(128, 32)
 const ctx = canvas.getContext('2d')
 const reader = require('../../acr1222l');
-const { PNG } = require('pngjs');
 
 async function main() {
   await reader.initialize((err) => {
@@ -16,7 +15,9 @@ async function main() {
   let dinoJumping = false;
   let jumpTimer = 0;
   let groundPosition = 0;
-  const refreshRate = 1500; // milliseconds
+  // 0 = draw as fast as the LCD allows (each displayImage only pushes the lines
+  // that changed). Raise this to slow the game down.
+  const refreshRate = 0; // milliseconds
 
   const startScreen = await loadImage('examples/dino/start_screen.png');
   const dinoRun1 = await loadImage("examples/dino/dino_run1.png");
@@ -67,22 +68,18 @@ async function main() {
     setTimeout(startReading, 1000);
   }
 
-  function drawCanvasOnLCD() {
-    const dataURL = canvas.toDataURL('image/png');
-    const base64Data = dataURL.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    new PNG({ filterType: 4 }).parse(buffer, function(err, data) {
-      if (err) throw err;
-      reader.displayImage(null, data);
-    })
+  // Read pixels straight from the canvas and push them to the LCD. No PNG
+  // encode/decode round-trip - displayImage only sends the lines that changed.
+  async function drawCanvasOnLCD() {
+    const img = ctx.getImageData(0, 0, 128, 32);
+    await reader.displayImage(null, { width: 128, height: 32, data: Buffer.from(img.data) });
   }
 
-  function drawStart() {
+  async function drawStart() {
     console.log("Drawing Start Screen");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(startScreen, 0, 0, 128, 32);
-    drawCanvasOnLCD();
+    try { await drawCanvasOnLCD(); } catch (e) { console.error(e); }
   }
 
   function drawDino() {
@@ -121,7 +118,9 @@ async function main() {
     cactus.draw();
     cactus.update();
 
-    drawCanvasOnLCD();
+    // Await the draw so frames don't pile up in the LCD queue (which is what
+    // made the game lag further and further behind).
+    try { await drawCanvasOnLCD(); } catch (e) { console.error(e); }
 
     setTimeout(update, refreshRate);
   }
