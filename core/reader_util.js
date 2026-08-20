@@ -72,6 +72,15 @@ const service = {
   },
 
   // 6.14.4 LCD Display (Graphic Mode)
+  //
+  // The ACR1222L LCD (128x32) is addressed by LINE, not by 16x16 block. Each
+  // "LCD Display" command is:
+  //     FF 00 6A <lineIndex> <Lc> <pixel bytes...>
+  // where lineIndex is 0x00..0x1F (top to bottom), each line is 16 bytes wide
+  // (128 px, MSB = leftmost pixel, bit = 1 lit), and Lc (pixel data length) may
+  // be up to 0x80 (128 bytes = 8 lines) per command. We pack the whole 32x128
+  // frame and send it as 4 commands of 8 lines each (line 0x00, 0x08, 0x10,
+  // 0x18). Verified against firmware ACR1222L-U V314.00.
   getImageCmd: async function (imagePath, PNGWithMetadata) {
     const fs = require('fs');
     const { PNG } = require('pngjs');
@@ -87,94 +96,41 @@ const service = {
       png = PNGWithMetadata;
     }
 
+    const WIDTH = 128;
+    const HEIGHT = 32;
+    const BYTES_PER_LINE = WIDTH / 8; // 16
+
     // Validate PNG dimensions
-    if (png.width != 128) throw new Error('Image width must be 128 pixels');
-    if (png.height != 32) throw new Error('Image height must be 32 pixels');
+    if (png.width != WIDTH) throw new Error('Image width must be 128 pixels');
+    if (png.height != HEIGHT) throw new Error('Image height must be 32 pixels');
 
-    // Convert PNG data to a 2D array
-    const pixels = [];
-    for (let i = 0; i < png.height; i++) {
-      const line = [];
-      for (let j = 0; j < png.width; j++) {
-        const idx = (png.width * i + j) << 2;
-        let byte = 0;
-        const pixel = {
-          r: png.data[idx],
-          g: png.data[idx + 1],
-          b: png.data[idx + 2],
-          a: png.data[idx + 3],
-        };
-        if (pixel.a > 126) { // checking transparency
-          const grayscale = parseInt(0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b);
+    // Pack the image into a line-major, 1-bit framebuffer.
+    // Byte layout per line: byte 0 holds x=0..7 (bit 7 = x=0), byte 15 holds
+    // x=120..127. A pixel is "lit" (bit = 1) when it is opaque and dark.
+    const frame = Buffer.alloc(HEIGHT * BYTES_PER_LINE);
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        const idx = (WIDTH * y + x) << 2;
+        const a = png.data[idx + 3];
+        if (a > 126) { // checking transparency
+          const grayscale = parseInt(0.2126 * png.data[idx] + 0.7152 * png.data[idx + 1] + 0.0722 * png.data[idx + 2]);
           if (grayscale < 128) { // checking color
-            byte = 1;
+            frame[y * BYTES_PER_LINE + (x >> 3)] |= (0x80 >> (x & 7));
           }
         }
-        line.push(byte);
-      }
-      pixels.push(line);
-    }
-
-    const resultSections = [];
-    const sectionRows = 16;
-    const sectionCols = 16;
-    const numCols = 128;
-    const numRows = 32;
-
-    // Iterate through the original matrix to define the top-left corner of each new section
-    // 'r' represents the starting row index for the current section
-    for (let r = 0; r < numRows; r += sectionRows) {
-      // 'c' represents the starting column index for the current section
-      for (let c = 0; c < numCols; c += sectionCols) {
-        const currentSection = []; // This will hold the 2D array for the current section
-
-        // Populate the current section by slicing rows from the original matrix
-        // 'i' iterates through the rows within the current section (from 0 to sectionRows - 1)
-        for (let i = 0; i < sectionRows; i++) {
-          // Check to ensure we don't go out of bounds if the matrix dimensions
-          // are not perfectly divisible by sectionRows.
-          if (r + i < numRows) {
-            // Get the row from the original matrix
-            const originalRow = pixels[r + i];
-            // Slice the relevant columns for the current section from this row
-            // The slice goes from 'c' (start column) up to 'c + sectionCols' (exclusive end column)
-            const rowSlice = originalRow.slice(c, c + sectionCols);
-            currentSection.push(rowSlice);
-          }
-        }
-        // Add the fully constructed current section to our results
-        resultSections.push(currentSection);
       }
     }
 
-    // Convert section to buffer commands
+    // Split into commands of at most 8 lines (0x80 bytes of pixel data) each.
+    const LINES_PER_CMD = 8;
     const buffers = [];
-    for (const sectionIndex in resultSections) {
-      const section = resultSections[sectionIndex];
-
-      const rowBuffer = [];
-      for (const rowIndex in section) {
-        const sectionRow = section[rowIndex];
-        // Split each row into two bytes
-        // Each row is 16 bits, so we take the first 8 bits for high and the next 8 bits for low byte
-        const highByte = parseInt(sectionRow.slice(0, 8).join(''), 2);
-        const lowByte = parseInt(sectionRow.slice(8, 16).join(''), 2);
-        rowBuffer.push(highByte, lowByte);
-      }
-
-      // Position of second row is 0x40, first row is 0x00
-      let position = parseInt(sectionIndex);
-      if (position > 7) {
-        position = 0x40 + (position - 8); // 0x40 is the second row
-      }
-
-      // Create buffer for the command
-      // 6.14.4 LCD Display (Graphic Mode) in the ACR1222L Application Programming Interface V2.01
-      const buffer = Buffer.concat([
-        Buffer.from([0xFF, 0x00, 0x6A, position, 0x20]),
-        Buffer.from(rowBuffer)
-      ]);
-      buffers.push(buffer);
+    for (let line = 0; line < HEIGHT; line += LINES_PER_CMD) {
+      const start = line * BYTES_PER_LINE;
+      const chunk = frame.slice(start, start + LINES_PER_CMD * BYTES_PER_LINE);
+      buffers.push(Buffer.concat([
+        Buffer.from([0xFF, 0x00, 0x6A, line, chunk.length]),
+        chunk
+      ]));
     }
 
     return buffers;
