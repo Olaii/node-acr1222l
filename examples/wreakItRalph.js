@@ -31,8 +31,15 @@ async function startReading() {
 }
 
 
-function randomIntFromInterval(min, max) { // min and max included 
-  return Math.floor(Math.random() * (max - min + 1) + min);
+// Keep refreshing the LCD roughly every 10ms, forever. Runs independently of the
+// card-reading loop: the LCD lives on the peripheral handle and the card on the
+// PICC handle, so these run in parallel. Each write is awaited before the next is
+// scheduled, so writes never pile up on the LCD lock.
+async function lcdLoop() {
+  while (true) {
+    await writeToLcd().catch(function (e) { console.log('lcd error:', e.message); });
+    await sleep(10);
+  }
 }
 
 async function main() {
@@ -43,12 +50,14 @@ async function main() {
 
     await sleep(1000);
 
-    // reader.readNDEF(addr_start = 0x04, addr_end = 0x0C);
+    // Start the LCD refresh loop (fire-and-forget; it runs for the process life).
+    lcdLoop();
 
+    // Read serially: start a read, wait for the response, then read again. Because
+    // each read is awaited, the reader gets idle time between reads and card
+    // removal is detected cleanly instead of being starved by back-to-back reads.
     while (true) {
-      startReading();
-      writeToLcd();
-      await sleep(randomIntFromInterval(0, 100));
+      await startReading();
     }
   } catch(e) {
     console.error(e);
