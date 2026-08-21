@@ -5,6 +5,8 @@
 
 const reader = require('../acr1222l');
 
+const keepAlive = setInterval(function () { }, 5);        
+
 async function error_cb(err) {
   console.log('Something went wrong:', err);
   if (err.error_code == 'READER_REMOVED') {

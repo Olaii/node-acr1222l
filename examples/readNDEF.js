@@ -9,6 +9,8 @@ function error_cb(err) {
   console.log('Something went wrong:', err);
 }
 
+const keepAlive = setInterval(function () { }, 5);
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

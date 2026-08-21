@@ -51,12 +51,137 @@ const service = {
   },
 
 
+  // 6.14.2 LCD Display (ASCII Mode)
   getLCDTextCmd: function (text, row_num = 1) {
     text = text + ' '.repeat(Math.max(16 - text.length, 0)); // fill in to be of length 16
     const txt = Buffer.from(text);
     const len = Buffer.from([text.length]);
     const row_cmd = row_num === 1 ? 0x00 : 0x40;
     return Buffer.concat([Buffer.from([0xFF, 0x00, 0x68, row_cmd]), len, txt]);
+  },
+
+  // 6.14.1 Clear LCD
+  getLCDClearCmd: function () {
+    return Buffer.from([0xFF, 0x00, 0x60, 0x00, 0x00]);
+  },
+
+  // 6.14.7 LCD Contrast Control
+  getLCDContrastControlCmd: function (contrast = 0) {
+    if (contrast < 0 || contrast > 15) throw new Error('Contrast must be between 0 and 15');
+    return Buffer.from([0xFF, 0x00, 0x6C, contrast, 0x00]);
+  },
+
+  // LCD geometry (128x32, 1bpp)
+  LCD_WIDTH: 128,
+  LCD_HEIGHT: 32,
+  LCD_BYTES_PER_LINE: 16,   // 128 px / 8
+  // The ACR1222L graphic mode is addressed in 16x16-dot blocks, so the panel is
+  // 2 block-rows x 8 block-cols = 16 blocks. Each block is painted by one
+  // command (see getLCDBlockCmd).
+  LCD_BLOCK: 16,
+  LCD_BLOCK_ROWS: 2,        // 32 / 16
+  LCD_BLOCK_COLS: 8,        // 128 / 16
+
+  // Pack a 128x32 image (PNG path or a decoded {width,height,data:RGBA} object)
+  // into a line-major, 1-bit framebuffer (HEIGHT * 16 = 512 bytes). Byte 0 of a
+  // line holds x=0..7 (bit 7 = x=0); a pixel is "lit" (bit = 1) when opaque and
+  // dark. This is the pixel source shared by getImageCmd / getImageDiffCmd.
+  buildImageFrame: function (imagePath, PNGWithMetadata) {
+    const WIDTH = service.LCD_WIDTH;
+    const HEIGHT = service.LCD_HEIGHT;
+    const BYTES_PER_LINE = service.LCD_BYTES_PER_LINE;
+
+    let png = null;
+    if (!PNGWithMetadata) {
+      const fs = require('fs');
+      const { PNG } = require('pngjs');
+      if (!imagePath) throw new Error('Image path is required');
+      if (imagePath.substr(-4, 4) != ".png") throw new Error('Image must be a PNG file');
+      png = PNG.sync.read(fs.readFileSync(imagePath));
+    } else {
+      png = PNGWithMetadata;
+    }
+
+    if (png.width != WIDTH) throw new Error('Image width must be 128 pixels');
+    if (png.height != HEIGHT) throw new Error('Image height must be 32 pixels');
+
+    const frame = Buffer.alloc(HEIGHT * BYTES_PER_LINE);
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        const idx = (WIDTH * y + x) << 2;
+        const a = png.data[idx + 3];
+        if (a > 126) { // checking transparency
+          const grayscale = parseInt(0.2126 * png.data[idx] + 0.7152 * png.data[idx + 1] + 0.0722 * png.data[idx + 2]);
+          if (grayscale < 128) { // checking color
+            frame[y * BYTES_PER_LINE + (x >> 3)] |= (0x80 >> (x & 7));
+          }
+        }
+      }
+    }
+    return frame;
+  },
+
+  // Build the graphic-mode command (6.14.4) that paints ONE 16x16 block from the
+  // line-major frame: FF 00 6A <P2> 0x20 <32 bytes>. P2 encodes the block
+  // position - high nibble 0x00 for the top block-row, 0x40 for the bottom,
+  // low nibble 0..7 for the block-column. The 32 bytes are row-major within the
+  // block: per dot-row, hi byte = columns 0-7, lo byte = columns 8-15. This is
+  // the addressing the hardware actually uses (verified on master); a scanline
+  // layout does not render.
+  getLCDBlockCmd: function (blockRow, blockCol, frame) {
+    const BPL = service.LCD_BYTES_PER_LINE;
+    const p2 = (blockRow ? 0x40 : 0x00) + blockCol;
+    const data = Buffer.alloc(service.LCD_BLOCK * 2); // 16 rows * 2 bytes = 32
+    let o = 0;
+    for (let r = 0; r < service.LCD_BLOCK; r++) {
+      const base = (blockRow * service.LCD_BLOCK + r) * BPL + blockCol * 2;
+      data[o++] = frame[base];      // columns 0-7 of this block row
+      data[o++] = frame[base + 1];  // columns 8-15 of this block row
+    }
+    return Buffer.concat([Buffer.from([0xFF, 0x00, 0x6A, p2, 0x20]), data]);
+  },
+
+  // True if the 16x16 block at (blockRow, blockCol) differs between two frames.
+  _blockChanged: function (frame, prevFrame, blockRow, blockCol) {
+    const BPL = service.LCD_BYTES_PER_LINE;
+    for (let r = 0; r < service.LCD_BLOCK; r++) {
+      const base = (blockRow * service.LCD_BLOCK + r) * BPL + blockCol * 2;
+      if (frame[base] !== prevFrame[base] || frame[base + 1] !== prevFrame[base + 1]) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+  // Full redraw: every one of the 16 blocks.
+  getImageCmdFromFrame: function (frame) {
+    const cmds = [];
+    for (let br = 0; br < service.LCD_BLOCK_ROWS; br++) {
+      for (let bc = 0; bc < service.LCD_BLOCK_COLS; bc++) {
+        cmds.push(service.getLCDBlockCmd(br, bc, frame));
+      }
+    }
+    return cmds;
+  },
+
+  // Incremental redraw: only the blocks that differ from prevFrame. Each graphic
+  // write costs ~1.1 ms/byte on the reader, so on animation (repeated
+  // displayImage calls) sending only changed blocks is the main speed lever.
+  getImageDiffCmdFromFrame: function (frame, prevFrame) {
+    const cmds = [];
+    for (let br = 0; br < service.LCD_BLOCK_ROWS; br++) {
+      for (let bc = 0; bc < service.LCD_BLOCK_COLS; bc++) {
+        if (service._blockChanged(frame, prevFrame, br, bc)) {
+          cmds.push(service.getLCDBlockCmd(br, bc, frame));
+        }
+      }
+    }
+    return cmds;
+  },
+
+  // Backwards-compatible full-image command builder.
+  getImageCmd: async function (imagePath, PNGWithMetadata) {
+    return service.getImageCmdFromFrame(service.buildImageFrame(imagePath, PNGWithMetadata));
   },
 
 
