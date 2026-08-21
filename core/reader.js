@@ -16,6 +16,15 @@ const service = {
   callback: function () { },
   _lastFrame: null, // last framebuffer sent to the LCD, for incremental redraw
 
+  // LCD graphic-mode addressing. The command layout changed with firmware:
+  //   firmware 3xx -> 'line'  (API 1.04 scanline layout)
+  //   firmware 4xx -> 'block' (API 2.01 16x16-block layout, 2022)
+  // 'auto' reads the firmware version on the first image draw and picks; use
+  // setLCDAddressing() to force it.
+  lcdAddressing: 'auto',        // 'auto' | 'line' | 'block'
+  _resolvedAddressing: null,    // cached result of auto-detection
+  firmwareVersion: null,        // reader firmware string, once read
+
   // Two independent FIFO locks, one per physical handle. The ACR1222L exposes
   // the contactless card on the PICC handle and drives its LCD/LED/buzzer as
   // device-level PC_to_RDR_Escape commands (ACR1222L API v1.04 6.0, vendor
@@ -546,21 +555,86 @@ const service = {
   */
   displayImage: async function (imagePath, PNGWithMetadata) {
     logger.log('Display image on LCD:', imagePath);
+    const addressing = await service._resolveAddressing();
     const frame = reader_util.buildImageFrame(imagePath, PNGWithMetadata);
 
+    const full = !(service._lastFrame && service._lastFrame.length === frame.length);
     let cmds;
-    if (service._lastFrame && service._lastFrame.length === frame.length) {
-      // Incremental: send only changed lines. Backlight is assumed already on.
-      cmds = reader_util.getImageDiffCmdFromFrame(frame, service._lastFrame);
+    if (addressing === 'line') {
+      // Incremental sends only changed lines; full redraw (re)asserts backlight.
+      cmds = full
+        ? [reader_util.CMD_BACKLIGHT_ON].concat(reader_util.getImageLineCmdsFromFrame(frame))
+        : reader_util.getImageLineDiffCmdsFromFrame(frame, service._lastFrame);
     } else {
-      // Full redraw (also (re)assert the backlight).
-      cmds = [reader_util.CMD_BACKLIGHT_ON].concat(reader_util.getImageCmdFromFrame(frame));
+      cmds = full
+        ? [reader_util.CMD_BACKLIGHT_ON].concat(reader_util.getImageCmdFromFrame(frame))
+        : reader_util.getImageDiffCmdFromFrame(frame, service._lastFrame);
     }
 
     service._lastFrame = frame;
 
     if (cmds.length === 0) return true; // nothing changed on screen
     return await service._wrapCommands(cmds);
+  },
+
+
+  /**
+  * Force the LCD graphic-mode addressing scheme, overriding auto-detection.
+  * @param {string} mode - 'auto' | 'line' | 'block'
+  */
+  setLCDAddressing: function (mode) {
+    if (mode !== 'auto' && mode !== 'line' && mode !== 'block') {
+      throw new AppError("LCD addressing must be 'auto', 'line' or 'block'", 'BAD_ADDRESSING');
+    }
+    logger.log('Set LCD addressing:', mode);
+    service.lcdAddressing = mode;
+    service._resolvedAddressing = (mode === 'auto') ? null : mode;
+    service._lastFrame = null; // scheme change invalidates the on-screen baseline
+    return true;
+  },
+
+
+  /**
+  * Resolve which graphic-mode addressing to use. Honors a manual override; in
+  * 'auto' reads the firmware version once and picks line (3xx) vs block (4xx).
+  */
+  _resolveAddressing: async function () {
+    if (service.lcdAddressing !== 'auto') return service.lcdAddressing;
+    if (service._resolvedAddressing) return service._resolvedAddressing;
+
+    let mode = 'block'; // fallback if the version can't be read
+    try {
+      const fw = await service.getFirmwareVersion();
+      const m = /V\s*(\d+)/i.exec(fw || '');
+      const major = m ? parseInt(m[1], 10) : 0;
+      // Firmware 4xx (and newer) uses the 16x16-block layout; 3xx uses scanlines.
+      mode = major >= 400 ? 'block' : 'line';
+      logger.log(`LCD addressing auto-detected: '${mode}' (firmware '${fw}')`);
+    } catch (err) {
+      logger.log(`LCD addressing auto-detect failed, defaulting to '${mode}':`, err && err.message);
+    }
+    service._resolvedAddressing = mode;
+    return mode;
+  },
+
+
+  /**
+  * Read the reader firmware version string (e.g. "ACR1222L-U V314.00") via the
+  * peripheral escape channel. Cached on service.firmwareVersion.
+  */
+  getFirmwareVersion: async function () {
+    return service._lcdRun(async function () {
+      const target = service.peripheralReader || service.reader;
+      if (!target) throw new Error('No reader available to read firmware');
+      if (!target.connected) await service._connectDirect(target);
+
+      const resp = Buffer.from(await service.transmitControl(reader_util.CMD_GET_FIRMWARE, target));
+      // Response: E1 00 00 00 <len> <ascii...>
+      const ascii = resp.slice(5).toString('ascii');
+      service.firmwareVersion = ascii;
+      logger.log('Firmware version:', ascii);
+      return ascii;
+    });
   },
 
 

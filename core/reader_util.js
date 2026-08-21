@@ -22,6 +22,8 @@ const service = {
     : Buffer.from([0xFF, 0x00, 0x00, 0x00, 0x04, 0xD4, 0x4A, 0x01, 0x00]),
   CMD_BACKLIGHT_ON: Buffer.from([0xFF, 0x00, 0x64, 0xFF, 0x00]),
   CMD_BACKLIGHT_OFF: Buffer.from([0xFF, 0x00, 0x64, 0x00, 0x00]),
+  // Reader firmware version (escape). Response: E1 00 00 00 <len> <ascii>.
+  CMD_GET_FIRMWARE: Buffer.from([0xE0, 0x00, 0x00, 0x18, 0x00]),
   CMD_READ_UUID: Buffer.from([0xFF, 0xCA, 0x00, 0x00, 0x00]),
   CMD_WRITE: function (buffer, addr) {
     return Buffer.from([0xFF, 0xD6, 0x00, addr, buffer.length, ...buffer]);
@@ -179,7 +181,57 @@ const service = {
     return cmds;
   },
 
-  // Backwards-compatible full-image command builder.
+  // --- Line / scanline addressing (API 1.04, firmware 3xx) --------------------
+  // Graphic command FF 00 6A <lineIndex> <Lc> <pixels>: lineIndex 0x00..0x1F
+  // (top to bottom), each line 16 bytes (128 px, MSB = leftmost), Lc up to 0x80
+  // (128 bytes = 8 lines) per command. The framebuffer is already line-major, so
+  // this sends contiguous runs of changed lines directly.
+  LCD_LINES_PER_CMD: 8, // 8 lines * 16 bytes = 128 bytes = 0x80 (max Lc)
+
+  getLCDLineCmd: function (lineIndex, chunk) {
+    return Buffer.concat([Buffer.from([0xFF, 0x00, 0x6A, lineIndex, chunk.length]), chunk]);
+  },
+
+  // Coalesce changed line indices into commands of at most LCD_LINES_PER_CMD.
+  _lineCmds: function (frame, changedLines) {
+    const BPL = service.LCD_BYTES_PER_LINE;
+    const MAX = service.LCD_LINES_PER_CMD;
+    const cmds = [];
+    let i = 0;
+    while (i < changedLines.length) {
+      const start = changedLines[i];
+      let count = 1;
+      while (i + count < changedLines.length &&
+             changedLines[i + count] === start + count &&
+             count < MAX) {
+        count++;
+      }
+      const from = start * BPL;
+      cmds.push(service.getLCDLineCmd(start, frame.slice(from, from + count * BPL)));
+      i += count;
+    }
+    return cmds;
+  },
+
+  // Full redraw: every line.
+  getImageLineCmdsFromFrame: function (frame) {
+    const lines = [];
+    for (let y = 0; y < service.LCD_HEIGHT; y++) lines.push(y);
+    return service._lineCmds(frame, lines);
+  },
+
+  // Incremental redraw: only lines that differ from prevFrame.
+  getImageLineDiffCmdsFromFrame: function (frame, prevFrame) {
+    const BPL = service.LCD_BYTES_PER_LINE;
+    const lines = [];
+    for (let y = 0; y < service.LCD_HEIGHT; y++) {
+      const s = y * BPL;
+      if (Buffer.compare(frame.slice(s, s + BPL), prevFrame.slice(s, s + BPL)) !== 0) lines.push(y);
+    }
+    return service._lineCmds(frame, lines);
+  },
+
+  // Backwards-compatible full-image command builder (block addressing).
   getImageCmd: async function (imagePath, PNGWithMetadata) {
     return service.getImageCmdFromFrame(service.buildImageFrame(imagePath, PNGWithMetadata));
   },
