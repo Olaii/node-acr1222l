@@ -1,6 +1,6 @@
 {
   "name": "acr1222l",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Node.js ACR1222L NFC reader library",
   "main": "acr1222l.js",
   "scripts": {
@@ -13,7 +13,7 @@
   "author": "Boris Savic",
   "license": "ISC",
   "dependencies": {
-    "@Olaii/pcsclite": "github:Olaii/node-pcsclite.git#1.0.0",
+    "@Olaii/pcsclite": "github:Olaii/node-pcsclite.git#1.1.1",
     "pngjs": "7.0.0",
     "ndef": "0.2.0"
   },
